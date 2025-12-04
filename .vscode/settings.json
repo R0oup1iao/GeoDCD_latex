@@ -43,25 +43,32 @@
             "args": [
                 "%DOCFILE%"
             ]
+        },
+        {
+            "name": "biber", 
+            "command": "biber", 
+            "args": [ 
+                "%DOCFILE%" 
+            ] 
         }
     ],
     "latex-workshop.latex.recipes": [
         {
-            "name": "XeLaTeX",
+            "name": "XeLaTeX -> Biber -> XeLaTeX*2", 
             "tools": [
+                "xelatex",
+                "biber",
+                "xelatex",
                 "xelatex"
             ]
         },
         {
-            "name": "PDFLaTeX",
+            "name": "PDFLaTeX -> Biber -> PDFLaTeX*2", 
             "tools": [
+                "pdflatex",
+                "biber",
+                "pdflatex",
                 "pdflatex"
-            ]
-        },
-        {
-            "name": "BibTeX",
-            "tools": [
-                "bibtex"
             ]
         },
         {
@@ -88,6 +95,18 @@
                 "pdflatex"
             ]
         },
+        {
+            "name": "XeLaTeX",
+            "tools": [
+                "xelatex"
+            ]
+        },
+        {
+            "name": "PDFLaTeX",
+            "tools": [
+                "pdflatex"
+            ]
+        }
     ],
     "latex-workshop.latex.clean.fileTypes": [
         "*.aux",
@@ -108,9 +127,11 @@
         "*.ist",
         "*.fls",
         "*.log",
-        "*.fdb_latexmk"
+        "*.fdb_latexmk",
+        "*.bcf",
+        "*.run.xml"
     ],
     "latex-workshop.latex.autoClean.run": "onFailed",
-    "latex-workshop.latex.recipe.default": "lastUsed",
+    "latex-workshop.latex.recipe.default": "first",
     "latex-workshop.view.pdf.internal.synctex.keybinding": "double-click"
 }

@@ -3,6 +3,7 @@
 \documentclass{article}
 \usepackage[utf8]{inputenc}
 \usepackage{authblk}
+\usepackage{amssymb}
 \usepackage{setspace}
 \usepackage[margin=1.25in]{geometry}
 \usepackage{graphicx}
@@ -67,84 +68,6 @@ The abstract should be a single paragraph written in plain language that a gener
 %%%%%% Main Text %%%%%%
 
 \section{Introduction}
-Your manuscript should contain all of the sections specified in this template: Introduction, Results, Discussion, Materials and Methods.
-
-The manuscript should start with a brief introduction that lays out the problem addressed by the research and describes the paper’s importance. The scientific question being investigated should be described in detail. The introduction should provide sufficient background information to make the article understandable to readers in other disciplines and provide enough context to ensure that the implications of the experimental findings are clear. 
-
-%%%%% Citations in the text %%%%%%
-\subsection*{Citations}
-Citations of references in the text should be identified using numbers in square brackets e.g., ``as discussed by Cui \cite{Cui1}'' or ``as discussed elsewhere \cite{Cui1,Ninomiya1,Li1,Wang1,Yang1}.'' All references should be cited within the text and uncited references will be removed. 
-
-As an example, this template includes a ``sample.bib'' file containing the references in BibTeX.
-
-%%%%%% Equations %%%%%%
-\subsection*{Equations}
-Equations should be provided in a text format, rather than as an image. Equations should be numbered consecutively, in round brackets, on the right-hand side of the page by using the ``\textbackslash begin\{equation\}'' command. They should be referred to as Equation 1, etc. in the main text.
-
-\medskip For example, see Equation \ref{eq:1} and Equation \ref{eq:2} below.
-\begin{equation} \label{eq:1}
-    a^2 + b^2 = c^2
-\end{equation}
-\begin{equation} \label{eq:2}
-\begin{split}
-A & = \frac{\pi r^2}{2} \\
- & = \frac{1}{2} \pi r^2
-\end{split}
-\end{equation}
-
-%%%%%% Figures %%%%%%
-\subsection*{Figures}
-Figures should be called out within the text and numbered in the order of their citation in the text. Every figure must have a descriptive title beginning with ``Figure [Number] …'' All figure titles should be either a phrase or a sentence; do not mix the two styles. See Figure \ref{fig:1} for example.
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.5\textwidth]{fig 1}
-    \caption{Short title of the figure. The figure legend should begin with a title (an overall description of the figure) followed by additional text. Each legend should be placed immediately after its corresponding figure.}
-    \label{fig:1}
-\end{figure}
-
-Legends (i.e., captions) should be included immediately after each figure or table. Each legend should start with a short title beginning with “Fig. [Number] …” or “Table [Number] …” No single legend should be longer than about 200 words. Nomenclature, abbreviations, symbols, and units used in a figure legend (and in the figure itself) should match those used in the text. Captions should be in full sentences and explain all components of a figure, including any acronyms, units, or variables; color or symbol schemes, if not obvious from the figure; length of scale bars, if not labeled; etc.
-
-Figures should be displayed on a white background. When preparing figures, consider that they can occupy either a single column (half page width) or two columns (full page width), and should be sized accordingly.
-
-If a figure consists of multiple panels, they should be ordered logically and labelled with roman letters (i.e., A, B, C, etc.). All labels should be explained in the legend. See Figure \ref{fig:2} for example.
-
-Upon acceptance, authors will be asked to provide the figures as separate electronic files. At that stage, figures should be supplied as Adobe Portable Document Format (PDF), PostScript (PS), or Encapsulated PostScript (EPS) for illustrations or diagrams; Tagged Image File Format (TIFF), JPEG, PNG, PhotoShop (PSD), EPS, or PDF for photography or microscopy. Bitmap formats (Photoshop, TIFF, JPEG, PNG) images should be of at least 300 dpi resolution, unless due to the limited resolution of a scientific instrument. If a bitmap image has labels, the image and labels should be embedded in separate layers.
-\begin{figure}[h]
-    \centering
-    \begin{subfigure}{0.4\textwidth}
-        \includegraphics[width=0.9\textwidth, height=2in]{fig 1}
-        \caption{\label{fig:2A}}
-    \end{subfigure}
-    \begin{subfigure}{0.4\textwidth}
-        \includegraphics[width=0.9\textwidth, height=2in]{fig 2}
-        \caption{\label{fig:2B}}
-    \end{subfigure}
-    \caption{This is an example of a figure consisting of multiple panels.     (\subref{fig:2A}) This is the first panel. (\subref{fig:2B}) This is the second panel.}
-    \label{fig:2}
-\end{figure}
-
-%%%%%% Tables %%%%%%
-\subsection*{Tables}
-Tables should supplement, not duplicate, the text. They should be called out consecutively within the text and numbered in the order of their citation in the text. 
-
-Every table must have a descriptive title beginning with ``Table [Number] …'' as noted in Table \ref{tab:1}. If numerical measurements are given, the units should be included in the column heading. Every vertical column should have a heading, followed by a unit of measure (if any) in parentheses. Units should not change within a column. Vertical rules should not be used. 
-
-Centered headings of the body of the table can be used to break the entries into groups. Do not use footnotes in column heads; include any such details in sentence form in the table legend. Footnotes should contain information relevant to specific cells of the table; use lowercase letters in alphabetical order, as needed: a, b, c, etc. 
-
-\begin{table}[b]
-    \caption{This is an example table.}    
-    \centering
-    \begin{tabular}{ccc}
-            \hline
-            Column 1 & Column 2 & Column 3 \\  
-            \hline
-            Cell 1 & Cell 2 & Cell 3\\ 
-            Cell 4 & Cell 5 & Cell 6 \\
-            \hline
-            \end{tabular}
-
-    \label{tab:1}
-\end{table}
 
 \section{Results}
 The results should describe the experiments performed and the findings observed. The results section should be divided into subsections to delineate different experimental themes. 
@@ -157,8 +80,51 @@ The results should describe the experiments performed and the findings observed.
 \section{Discussion}
 Include a Discussion that summarizes (but does not merely repeat) your conclusions and elaborates on their implications. There should be a paragraph outlining the limitations of your results and interpretation, as well as a discussion of the steps that need to be taken for the findings to be applied. Please avoid claims of priority. 
 
-\section{Materials and Methods}
-The materials and methods section should provide sufficient information to allow replication of the results. This section should be broken up by subheadings. Under exceptional circumstances, when a particularly lengthy description is required, a portion of the materials and methods can be included in the Supplementary Materials. 
+\section{Preliminary}
+\label{sec:preliminary}
+
+This section establishes the theoretical underpinnings of our study by tracing the evolution of Granger Causality from linear formulations to neural interpretations. We subsequently provide a formal definition of the multivariate spatiotemporal causal discovery problem, grounded in geometric coordinates.
+
+\subsection{Granger Causality: Linear and Neural Views}
+
+\paragraph{Linear Granger Causality}
+The core tenet of Granger Causality lies in \textit{predictability}. For two time-series variables $X_j$ and $X_i$, $X_j$ is said to Granger-cause $X_i$ ($X_j \to X_i$) if the inclusion of $X_j$'s history significantly reduces the prediction error for $X_i$'s future values, compared to using the history of $X_i$ alone.
+
+In classical Vector Autoregression (VAR) models, this relationship is formalized as:
+\begin{equation}
+    \mathbf{X}_t = \sum_{\tau=1}^P \mathbf{A}_\tau \mathbf{X}_{t-\tau} + \varepsilon_t
+\end{equation}
+where $P$ denotes the maximum time lag, and $\mathbf{A}_\tau$ represents the coefficient matrix at lag $\tau$. If the element $A_{\tau, ij} = 0$ for all $\tau \in \{1, \dots, P\}$, we conclude that $X_j \nrightarrow X_i$.
+
+However, this linear formulation faces two significant impediments when applied to large-scale geospatial systems ($N \sim 10^3$). First, the parameter space expands quadratically ($O(N^2)$), rendering computation intractable. Second, linear assumptions fail to capture the complex, nonlinear dynamics inherent in physical phenomena, such as fluid turbulence or nonlinear climatic interactions.
+
+\paragraph{Neural Granger Causality}
+To surmount the limitations of linearity, Neural Granger Causality (Neural GC) replaces linear transformations with nonlinear deep neural networks, denoted as $f_\theta$:
+\begin{equation}
+    \mathbf{X}_t = f_\theta(\mathbf{X}_{t-1}, \dots, \mathbf{X}_{t-P}) + \varepsilon_t
+\end{equation}
+In this framework, causal inference does not rely on fixed coefficient matrices. Instead, causality is estimated by examining how perturbations in the input history influence the model output. Jacobian-based sensitivity analysis is the prevailing method for quantifying this influence:
+\begin{equation}
+    \mathcal{S}_{i\leftarrow j}(t) = \left| \frac{\partial \hat{x}_{i, t+1}}{\partial x_{j, t}} \right|
+\end{equation}
+GeoDCD operates within this Neural GC paradigm, specifically adapted and optimized for high-dimensional geometric spatiotemporal data.
+
+\subsection{Problem Definition}
+We consider a multivariate spatiotemporal system comprising $N$ spatial locations. The available data consists of two distinct components:
+
+\begin{itemize}
+    \item \textbf{Observation Matrix} $\mathbf{D} \in \mathbb{R}^{T \times N}$: Here, $T$ denotes the total time steps and $N$ the number of spatial nodes. At time $t$, the system state vector is denoted as $\mathbf{x}_t = \mathbf{D}_{t, :} \in \mathbb{R}^N$.
+    \item \textbf{Coordinate Matrix} $\mathbf{C} \in \mathbb{R}^{N \times 2}$ (or $\mathbb{R}^{N \times 3}$): This contains the physical positioning of each variable (e.g., latitude/longitude or Cartesian coordinates), providing the model with critical geometric priors.
+\end{itemize}
+
+Our objective is to leverage $\mathbf{D}$ and $\mathbf{C}$ to infer latent causal structures, specifically:
+\begin{enumerate}
+    \item \textbf{Static Causal Structure} $\mathbf{A} \in \mathbb{R}^{N \times N}$: The directed connectivity skeleton representing persistent interactions that do not vanish over time.
+    \item \textbf{Dynamic Causal Strength} $\mathcal{S}(t) \in \mathbb{R}^{N \times N}, \quad t=1, \dots, T$: A metric capturing the instantaneous intensity of interactions as the system state evolves.
+\end{enumerate}
+
+Geospatial systems are typically characterized by high dimensionality ($N \gg T$), strong spatial autocorrelation, and non-stationarity. GeoDCD addresses these challenges through geometrically aware hierarchical modeling.
+
 
 \subsection{Experimental Design}
 Begin with a section titled Experimental Design describing the objectives and design of the study as well as prespecified components. 
