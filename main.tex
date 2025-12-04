@@ -125,6 +125,104 @@ Our objective is to leverage $\mathbf{D}$ and $\mathbf{C}$ to infer latent causa
 
 Geospatial systems are typically characterized by high dimensionality ($N \gg T$), strong spatial autocorrelation, and non-stationarity. GeoDCD addresses these challenges through geometrically aware hierarchical modeling.
 
+\section{Methodology}
+\subsection{Overall Workflow Architecture}
+The GeoDCD framework operates as a unified, end-to-end deep learning pipeline. It accepts raw multivariate time-series data and their associated spatial coordinates as input and produces both a static causal graph (representing long-term structural dependencies) and a dynamic causal tensor (representing instantaneous interaction strengths). The methodology is structured into five sequential components, each addressing a specific aspect of the spatiotemporal causal discovery problem.
+The pipeline is composed of five sequential components: (1) \textbf{Spatiotemporal Data Ingestion}, which handles preprocessing and tensor construction; (2) \textbf{Hierarchical Geometric Pooling}, performing bottom-up spatial aggregation; (3) \textbf{Geo-Encoder-Decoder Backbone}, modeling latent dynamics via Transformers; (4) \textbf{Sparse Structural Learning}, estimating the adjacency matrix via Basis Decomposition; and (5) \textbf{Dynamic Inference \& Jacobian Analysis}, extracting time-varying causal graphs.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/overview.png}
+    \caption{Overall Workflow of GeoDCD. Top: Raw grid data. Middle: The Hierarchy (Level 0 $\to$ Level 1) showing nodes merging into patches. Bottom: The Network Architecture (Encoder $\to$ Graph Layer $\to$ Decoder). Arrows indicate the forward pass.}
+    \label{fig:workflow}
+\end{figure}
+\subsection{Spatiotemporal Data Ingestion and Preprocessing}
+The foundation of the pipeline is the rigorous preparation of data tensors. We employ a sliding window strategy to model temporal dependencies. The multivariate time-series $\mathbf{D} \in \mathbb{R}^{T_{total} \times N}$ is sliced into overlapping sequences of length $L$, transforming the dataset into a tensor $\mathcal{X} \in \mathbb{R}^{B \times N \times L}$. This allows the model to learn from local temporal contexts.
+To facilitate stable training and geometric clustering, we apply Z-score normalization (standardization) to both the time-series data and the spatial coordinates $\mathbf{C} \in \mathbb{R}^{N \times 2}$. Normalizing coordinates ensures that the clustering process is invariant to the absolute scale of the physical system.
+\subsection{Hierarchical Geometric Pooling}
+To resolve the $O(N^2)$ scalability bottleneck, GeoDCD introduces a Geometric Pooler. This component uses physical proximity to aggregate nodes into ``super-nodes'' or patches, creating a hierarchical representation of the system. This allows the causal discovery process to occur at multiple resolutions—coarse-grained for regional trends and fine-grained for local interactions.
+\subsubsection{K-Means Spatial Clustering}
+We employ the K-Means algorithm on the normalized coordinate matrix $\mathbf{C}$ to partition the $N$ nodes into $K$ distinct clusters. This step injects strong inductive bias: we assume that spatially proximal nodes are more likely to share functional characteristics or be governed by similar local dynamics.
+The algorithm minimizes the intra-cluster variance:
+\begin{equation}
+\arg \min_{\mathbf{S}} \sum_{k=1}^K \sum_{i \in \text{Cluster}_k} || \mathbf{c}_i - \mathbf{\mu}_k ||^2
+\end{equation}
+where $\mathbf{S} \in \{0, 1\}^{N \times K}$ is the hard assignment matrix derived from the clustering labels. Specifically, $S_{ik} = 1$ if node $i$ is assigned to cluster $k$, and 0 otherwise. This matrix is precomputed during the initialization phase.
+\subsubsection{Feature Aggregation (Pooling)}
+During the forward pass, the feature representations of nodes within a cluster are aggregated to form the input for the next level of the hierarchy. The pooling operation is defined as a matrix multiplication:
+\begin{equation}
+\mathbf{X}^{(l+1)} = (\mathbf{S}^{(l)})^\top \mathbf{X}^{(l)}
+\end{equation}
+To prevent magnitude explosion, the assignment matrix $\mathbf{S}$ is column-normalized, effectively computing the average feature vector for each cluster. This reduces the spatial dimension from $N$ to $K$, significantly lowering the computational cost for subsequent layers. The coordinates for the new level are similarly updated by computing the centroids of the clusters: $\mathbf{C}^{(l+1)} = (\mathbf{S}^{(l)})^\top \mathbf{C}^{(l)}$.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/pooling.png}
+    \caption{Geometric Pooling Visualization. A diagram showing a set of scattered points (nodes) on a 2D plane. Circles delineate K-Means clusters. An arrow points to a smaller set of nodes representing the cluster centroids, illustrating the dimensionality reduction.}
+    \label{fig:pooling}
+\end{figure}
+\subsection{Geo-Encoder-Decoder Backbone}
+At the heart of GeoDCD is a sequence-to-sequence architecture that models the temporal evolution of the system. We utilize a Causal Transformer, adapted from the standard Transformer architecture, to capture long-range temporal dependencies without suffering from the vanishing gradient problem common in Recurrent Neural Networks (RNNs).
+\subsubsection{Positional Encoding}
+Since Transformers are permutation-invariant, we must inject explicit temporal order information. We use sinusoidal positional encodings added to the input embeddings:
+\begin{align}
+PE_{(pos, 2i)} &= \sin(pos / 10000^{2i/d_{model}}) \\
+PE_{(pos, 2i+1)} &= \cos(pos / 10000^{2i/d_{model}})
+\end{align}
+This allows the model to distinguish between different time steps within the look-back window.
+\subsubsection{Causal Self-Attention}
+The core mechanism is the Multi-Head Self-Attention (MSA). To ensure that the prediction for time $t$ depends only on the history $t' \le t$ (respecting physical causality), we apply a Causal Mask to the attention scores.
+The attention mechanism is computed as:
+\begin{equation}
+\text{Attention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \text{softmax}\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}} + \mathbf{M}\right)\mathbf{V}
+\end{equation}
+Here, $\mathbf{M}$ is a square matrix where $M_{ij} = -\infty$ if $j > i$ (masking future positions) and $0$ otherwise. This strictly prevents information leakage from the future.
+\subsubsection{Pre-LayerNorm Architecture}
+To improve training stability and convergence, we adopt the \textbf{Pre-LayerNorm} architecture. Unlike the original Post-LN design where Layer Normalization (LN) is applied after the residual connection, we apply LN before the Multi-Head Self-Attention (MSA) and Feed-Forward Networks (FFN). This structural modification creates a direct path for gradients to flow through the residual connections, significantly mitigating the risk of gradient vanishing in deep networks.
+The forward pass for a single encoder layer is defined as:
+\begin{align}
+\mathbf{Z}' &= \text{MSA}(\text{LN}(\mathbf{Z})) + \mathbf{Z} \\
+\mathbf{Z}_{out} &= \text{FFN}(\text{LN}(\mathbf{Z}')) + \mathbf{Z}'
+\end{align}
+This design mitigates the risk of gradient vanishing in deep networks. The architecture acts as a temporal autoencoder:
+\begin{enumerate}
+    \item \textbf{Encoder}: Maps the input sequence $\mathbf{X}$ to a latent dynamic representation $\mathbf{Z} \in \mathbb{R}^{B \times N \times L \times D_{model}}$.
+    \item \textbf{Decoder}: Receives the processed latent states and attempts to reconstruct the input sequence (Reconstruction) and predict the next time step (Forecasting).
+\end{enumerate}
+\subsection{Sparse Structural Learning via Basis Decomposition}
+A standard dense layer connecting $N$ nodes would require $N^2$ parameters, which is prohibitive. GeoDCD implements a novel Causal Graph Layer that learns the adjacency matrix efficiently.
+\subsubsection{Basis Decomposition}
+Instead of learning a unique weight for every pair of nodes directly, we decompose the weight tensor into a linear combination of a small number of shared basis matrices. Let $N_{basis}$ be the number of bases (e.g., 4) and $D_{model}$ be the channel dimension.
+We define:
+\begin{itemize}
+    \item $\mathbf{B} \in \mathbb{R}^{N_{basis} \times N \times N}$: The tensor of basis adjacency matrices.
+    \item $\mathbf{c} \in \mathbb{R}^{D_{model} \times N_{basis}}$: The coefficient matrix determining how channels mix the bases.
+\end{itemize}
+The effective weight matrix for the graph convolution is reconstructed as:
+\begin{equation}
+\mathbf{W}_{eff} = \sum_{k=1}^{N_{basis}} \mathbf{c}_{\cdot, k} \otimes \mathbf{B}_{k}
+\end{equation}
+This reduces the parameter space significantly, acting as a low-rank approximation of the causal structure. It forces the model to learn fundamental interaction patterns that are reused across different feature channels.
+\subsubsection{Graph Propagation and Loss Functions}
+The latent representation $\mathbf{Z}$ is propagated through this learned structure:
+\begin{equation}
+\mathbf{Z}_{next} = \tanh(\mathbf{Z} \cdot \mathbf{W}_{eff})
+\end{equation}
+The training is guided by a composite loss function $\mathcal{L}_{total}$ that balances reconstruction accuracy, prediction fidelity, and structural sparsity:
+\begin{equation}
+\mathcal{L}_{total} = \underbrace{\frac{1}{T}\sum_{t} ||x_t - \hat{x}_t^{rec}||^2}_{\text{Reconstruction Loss}} + \underbrace{\frac{1}{T}\sum_{t} ||x_{t+1} - \hat{x}_{t+1}^{pred}||^2}_{\text{Prediction Loss}} + \lambda_{L1} \underbrace{||\mathbf{A}_{learned}||_1}_{\text{Sparsity Loss}}
+\end{equation}
+\begin{itemize}
+    \item \textbf{Prediction Loss}: Directly implements the Neural Granger Causality principle—if node $j$ causes node $i$, the link $A_{ji}$ must be non-zero to minimize the prediction error of $x_{i, t+1}$.
+    \item \textbf{Sparsity Loss}: An L1 penalty on the adjacency matrix $\mathbf{A}$ promotes a sparse graph, reflecting the assumption that physical systems are locally connected and not fully dense.
+\end{itemize}
+\subsection{Dynamic Inference and Jacobian Analysis}
+While the learned matrix $\mathbf{A}$ represents the ``static'' or average structural connectivity, real-world systems exhibit dynamic causality where interaction strengths fluctuate over time. GeoDCD extracts these dynamics during the inference phase.
+\subsubsection{Jacobian Sensitivity Analysis}
+To quantify the instantaneous causal strength from node $j$ to node $i$ at time $t$, we compute the Jacobian of the predicted future state with respect to the input state.
+Let $\hat{x}_{i, t+1} = f(\mathbf{x}_t)$ be the model's prediction. The dynamic causal strength is defined as:
+\begin{equation}
+\mathcal{S}_{i \leftarrow j}(t) = \left\| \frac{\partial \hat{x}_{i, t+1}}{\partial x_{j, t}} \right\|_F
+\end{equation}
+where $\|\cdot\|_F$ denotes the Frobenius norm, aggregating the sensitivity across the feature dimension. We compute this via automatic differentiation, iterating through each target node $i$ to obtain the gradient of its prediction with respect to the input tensor $\mathbf{X}_t$. This yields a dynamic adjacency tensor of shape $(N \times N \times T)$, capturing the time-varying causal topology.
 
 \subsection{Experimental Design}
 Begin with a section titled Experimental Design describing the objectives and design of the study as well as prespecified components. 
