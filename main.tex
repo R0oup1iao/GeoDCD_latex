@@ -1,5 +1,3 @@
-
-
 \documentclass{article}
 \usepackage[utf8]{inputenc}
 \usepackage{authblk}
@@ -24,23 +22,21 @@ sorting=none]{biblatex}
 %%%%%% Title %%%%%%
 % Full titles can be a maximum of 200 characters, including spaces. 
 % Title Format: Use title case, capitalizing the first letter of each word, except for certain small words, such as articles and short prepositions
-\title{Research \LaTeX\ Template}
+\title{GeoDCD: From Spatial Priors to Time-Varying Dynamics for Large-Scale Causal Discovery}
 
 %%%%%% Authors %%%%%%
 % Authors should be listed in order of contribution to the paper, by full first name, then middle initial (if any), followed by last name and separated by commas.
 % Please do not use initials for first names. If you use your middle name as a full name, use an initial for the first name and spell out your full middle name.
 % Use a superscript asterisk (*) to identify the corresponding author and be sure to include that person’s e-mail address. Use symbols (in this order: †, ‡, §, ||, ¶, #, ††, ‡‡, etc.) for author notes, such as present addresses, “These authors contributed equally to this work” notations, and similar information.
 % You can include group authors, but please include a list of the actual authors (the group members) in the Supplementary Materials.
-\author[1*$\dag$]{Author One}
-\author[2$\dag$]{Author Two}
-\author[2]{Author Three}
-\author[1,2]{Author Four}
+\author[1]{Haoyang Yan}
+\author[1,2]{Xiaolei Ma*}
 
 %%%%%% Affiliations %%%%%%
-\affil[1]{Department of Physics, A University, City, Country.}
-\affil[2]{Department of Astronomy, B University, City, Country.}
-\affil[*]{Address correspondence to: email@email.com}
-\affil[$\dag$]{These authors contributed equally to this work.}
+\affil[1]{School of Transportation Science and Engineering, Beihang University, Beijing, China.}
+\affil[2]{Key Laboratory of Intelligent Transportation Technology and System of the Ministry of Education, Beihang University, Beijing 102206, China}
+\affil[*]{Address correspondence to: xiaolei@buaa.edu.cn}
+% \affil[$\dag$]{These authors contributed equally to this work.}
 
 %%%%%% Date %%%%%%
 % Date is optional
@@ -56,13 +52,7 @@ sorting=none]{biblatex}
 
 %%%%%% Abstract %%%%%%
 \begin{abstract}
-The abstract should be a single paragraph written in plain language that a general reader can understand. Do not include citations, figures, tables, or undefined abbreviations in the abstract. Any abbreviations that appear in the title should be defined in the abstract. The length should be 200 words and not exceed 300 words, to include: 
-\begin{itemize}
-    \item An opening sentence that states the question/problem addressed by the research AND
-    \item Enough background content to give context to the study AND
-    \item A brief statement of primary results AND
-    \item A short concluding sentence.
-\end{itemize} 
+Discovering causal relationships from high-dimensional time-series data is a fundamental yet challenging task, particularly in systems exhibiting non-linear interactions and time-varying dynamics. Existing methods often struggle with the ``curse of dimensionality'' and fail to capture the evolution of causal strengths over time, typically assuming stationarity or ignoring available metadata. In this paper, we propose GeoDCD (\textbf{Geo}metric \textbf{D}ynamic \textbf{C}ausal \textbf{D}iscovery), a scalable framework that explicitly leverages spatial priors to uncover time-varying causal dynamics in large-scale systems. Unlike traditional approaches that treat variables as isolated nodes, GeoDCD incorporates physical coordinates into a hierarchical learning process. We introduce a Geometric Pooler that clusters variables into local patches based on spatial proximity, enabling a coarse-to-fine discovery mechanism that significantly reduces the search space. Furthermore, we design a Causal Transformer coupled with Basis Decomposition to model complex non-linear interactions efficiently, allowing for the inference of instantaneous causal strengths via Jacobian-based sensitivity analysis. To evaluate our method, we introduce Cluster-Lorenz, a novel synthetic benchmark designed to simulate spatially clustered dynamic systems. Experiments on this benchmark demonstrate that GeoDCD achieves superior F1-scores against state-of-the-art baselines. Furthermore, we deploy GeoDCD on large-scale real-world geospatial datasets, demonstrating its capability to scale efficiently and uncover meaningful dynamic patterns in complex physical systems.
 \end{abstract}
 
 %%%%%% Main Text %%%%%%
@@ -131,7 +121,7 @@ The GeoDCD framework operates as a unified, end-to-end deep learning pipeline. I
 The pipeline is composed of five sequential components: (1) \textbf{Spatiotemporal Data Ingestion}, which handles preprocessing and tensor construction; (2) \textbf{Hierarchical Geometric Pooling}, performing bottom-up spatial aggregation; (3) \textbf{Geo-Encoder-Decoder Backbone}, modeling latent dynamics via Transformers; (4) \textbf{Sparse Structural Learning}, estimating the adjacency matrix via Basis Decomposition; and (5) \textbf{Dynamic Inference \& Jacobian Analysis}, extracting time-varying causal graphs.
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.8\textwidth]{figures/overview.png}
+    \includegraphics[width=0.8\textwidth]{figures/overview.pdf}
     \caption{Overall Workflow of GeoDCD. Top: Raw grid data. Middle: The Hierarchy (Level 0 $\to$ Level 1) showing nodes merging into patches. Bottom: The Network Architecture (Encoder $\to$ Graph Layer $\to$ Decoder). Arrows indicate the forward pass.}
     \label{fig:workflow}
 \end{figure}
