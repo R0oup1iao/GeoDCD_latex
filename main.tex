@@ -17,7 +17,7 @@
 \usepackage[style=nejm, 
 citestyle=numeric-comp,
 sorting=none]{biblatex}
-\addbibresource{sample.bib}
+\addbibresource{ref.bib}
 
 %%%%%% Title %%%%%%
 % Full titles can be a maximum of 200 characters, including spaces. 
@@ -61,11 +61,11 @@ Discovering causal relationships from high-dimensional time-series data is a fun
 
 \label{sec:intro}
 
-Understanding the complex interactions governing large-scale spatiotemporal systems—such as atmospheric flows, oceanic circulation, and urban traffic networks—remains a central challenge in scientific discovery. While deep learning has achieved remarkable success in \textit{predicting} future states, extracting interpretable \textit{causal mechanisms} from high-dimensional observations remains difficult. Reliable causal knowledge, beyond statistical association, is essential for policy-making, system control, and physical understanding \cite{18,19}. Yet in Earth and environmental sciences, large-scale randomized interventions are impossible \cite{20,21}, forcing researchers to rely on observational causal discovery methods to recover dynamic interaction structures \cite{11}.
+Understanding the complex interactions governing large-scale spatiotemporal systems—such as atmospheric flows, oceanic circulation, and urban traffic networks—remains a central challenge in scientific discovery. While deep learning has achieved remarkable success in \textit{predicting} future states, extracting interpretable \textit{causal mechanisms} from high-dimensional observations remains difficult. Reliable causal knowledge, beyond statistical association, is essential for policy-making, system control, and physical understanding \cite{Liu2021,Hassani2021}. Yet in Earth and environmental sciences, large-scale randomized interventions are impossible \cite{Takens1981,Chen2020}, forcing researchers to rely on observational causal discovery methods to recover dynamic interaction structures \cite{Pearl2009}.
 
-However, three fundamental challenges persist when applying causal discovery frameworks to high-dimensional physical systems. First, classical temporal causality models—such as Granger Causality and convergent cross-mapping (CCM)—implicitly assume stationarity, treating causal relations as time-invariant \cite{12,38}. In reality, interactions in physical systems are often regime-dependent and evolve with their underlying states; for example, atmospheric teleconnections or traffic interactions can strengthen or weaken under different operating conditions. Second, high dimensionality poses severe computational barriers. Structural learning algorithms (e.g., PC) and multivariate autoregressive models scale quadratically or cubically with the number of variables ($N$), making them impractical for systems with thousands of spatial units \cite{43}. Third, most existing approaches treat variables as exchangeable nodes in a graph, ignoring spatial geometry \cite{13}. Yet in physical systems, interactions are strongly modulated by distance, spatial contiguity, and propagation constraints—inductive biases that purely statistical methods fail to exploit.
+However, three fundamental challenges persist when applying causal discovery frameworks to high-dimensional physical systems. First, classical temporal causality models—such as Granger Causality and convergent cross-mapping (CCM)—implicitly assume stationarity, treating causal relations as time-invariant \cite{Rubin1974}. In reality, interactions in physical systems are often regime-dependent and evolve with their underlying states; for example, atmospheric teleconnections or traffic interactions can strengthen or weaken under different operating conditions. Second, high dimensionality poses severe computational barriers. Structural learning algorithms (e.g., PC) and multivariate autoregressive models scale quadratically or cubically with the number of variables ($N$), making them impractical for systems with thousands of spatial units \cite{}. Third, most existing approaches treat variables as exchangeable nodes in a graph, ignoring spatial geometry \cite{}. Yet in physical systems, interactions are strongly modulated by distance, spatial contiguity, and propagation constraints—inductive biases that purely statistical methods fail to exploit.
 
-Recent attempts have incorporated spatial information by using cross-sectional neighbors to construct embedding spaces, as in the Geographical Convergent Cross Mapping (GCCM) model \cite{15,53}. While GCCM successfully improves directionality detection in spatially coupled variables \cite{17,50}, it remains fundamentally pairwise and does not scale to network-level causal discovery. Moreover, although spatial lags can enhance detection power \cite{93}, there is still a lack of unified frameworks that explicitly encode geometric coordinates to guide the search for \textit{time-varying} causal structures in large-scale systems.
+Recent attempts have incorporated spatial information by using cross-sectional neighbors to construct embedding spaces, as in the Geographical Convergent Cross Mapping (GCCM) model \cite{}. While GCCM successfully improves directionality detection in spatially coupled variables \cite{}, it remains fundamentally pairwise and does not scale to network-level causal discovery. Moreover, although spatial lags can enhance detection power \cite{}, there is still a lack of unified frameworks that explicitly encode geometric coordinates to guide the search for \textit{time-varying} causal structures in large-scale systems.
 
 To address these challenges, we propose \textbf{GeoDCD} (\textbf{Geo}metric \textbf{D}ynamic \textbf{C}ausal \textbf{D}iscovery), a scalable framework that integrates spatial priors with nonlinear dynamical modeling. GeoDCD is based on the observation that physical interactions rarely occur arbitrarily: they propagate through space and evolve over time. By explicitly incorporating geographic coordinates, GeoDCD transforms the intractable fully connected causal search into a structured, geometry-constrained optimization problem.
 
@@ -76,10 +76,10 @@ Our main contributions are:
 We introduce a hierarchical geometric pooling mechanism that partitions variables into spatially coherent patches. Unlike GNN-based approaches that learn geometry implicitly, GeoDCD leverages explicit coordinates to impose locality constraints. This coarse-to-fine design reduces the effective search space from $O(N^2)$ to scaling with the number of patches, enabling near-linear scalability on large grids.
 
 \item \textbf{Dynamic Causal Graph Extraction.}
-GeoDCD couples a Causal Transformer backbone with Jacobian-based sensitivity analysis to derive instantaneous causal graphs at each time step. This allows the model to capture non-stationary, state-dependent causal interactions—an essential property of real-world Earth system dynamics \cite{12}.
+GeoDCD couples a Causal Transformer backbone with Jacobian-based sensitivity analysis to derive instantaneous causal graphs at each time step. This allows the model to capture non-stationary, state-dependent causal interactions—an essential property of real-world Earth system dynamics \cite{Rubin1974}.
 
 \item \textbf{Robustness in Complex Spatiotemporal Systems.}
-We introduce \textit{Cluster-Lorenz}, a synthetic benchmark simulating spatially clustered chaotic dynamics, and evaluate GeoDCD on both synthetic and real geospatial datasets. Results show that geometric priors not only improve computational scalability but also enhance causal fidelity by suppressing spurious long-range correlations that commonly mislead statistical methods \cite{55}.
+We introduce \textit{Cluster-Lorenz}, a synthetic benchmark simulating spatially clustered chaotic dynamics, and evaluate GeoDCD on both synthetic and real geospatial datasets. Results show that geometric priors not only improve computational scalability but also enhance causal accuracy by suppressing spurious long-range correlations that commonly mislead statistical methods \cite{55}.
 
 \end{enumerate}
 
@@ -214,11 +214,11 @@ Geospatial systems are typically characterized by high dimensionality ($N \gg T$
 \section{Methodology}
 \subsection{Overall Workflow Architecture}
 The GeoDCD framework operates as a unified, end-to-end deep learning pipeline. It accepts raw multivariate time-series data and their associated spatial coordinates as input and produces both a static causal graph (representing long-term structural dependencies) and a dynamic causal tensor (representing instantaneous interaction strengths). The methodology is structured into five sequential components, each addressing a specific aspect of the spatiotemporal causal discovery problem.
-The pipeline is composed of five sequential components: (1) \textbf{Spatiotemporal Data Ingestion}, which handles preprocessing and tensor construction; (2) \textbf{Hierarchical Geometric Pooling}, performing bottom-up spatial aggregation; (3) \textbf{Geo-Encoder-Decoder Backbone}, modeling latent dynamics via Transformers; (4) \textbf{Sparse Structural Learning}, estimating the adjacency matrix via Basis Decomposition; and (5) \textbf{Dynamic Inference \& Jacobian Analysis}, extracting time-varying causal graphs.
+The pipeline is composed of five sequential components: (1) \textbf{Spatiotemporal Data Ingestion}, which handles preprocessing and tensor construction; (2) \textbf{Hierarchical Geometric Pooling}, performing bottom-up spatial aggregation; (3) \textbf{Geo-Encoder Backbone}, modeling latent dynamics via Transformers; (4) \textbf{Sparse Structural Learning}, estimating the adjacency matrix via Basis Decomposition; and (5) \textbf{Dynamic Inference \& Jacobian Analysis}, extracting time-varying causal graphs.
 \begin{figure}[h]
     \centering
     \includegraphics[width=0.8\textwidth]{figures/overview.pdf}
-    \caption{Overall Workflow of GeoDCD. Top: Raw grid data. Middle: The Hierarchy (Level 0 $\to$ Level 1) showing nodes merging into patches. Bottom: The Network Architecture (Encoder $\to$ Graph Layer $\to$ Decoder). Arrows indicate the forward pass.}
+    \caption{Overall Workflow of GeoDCD. Top: Raw grid data. Middle: The Hierarchy (Level 0 $\to$ Level 1) showing nodes merging into patches. Bottom: The Network Architecture (Encoder $\to$ Graph Layer $\to$ Prediction). Arrows indicate the forward pass.}
     \label{fig:workflow}
 \end{figure}
 \subsection{Spatiotemporal Data Ingestion and Preprocessing}
@@ -238,14 +238,18 @@ During the forward pass, the feature representations of nodes within a cluster a
 \begin{equation}
 \mathbf{X}^{(l+1)} = (\mathbf{S}^{(l)})^\top \mathbf{X}^{(l)}
 \end{equation}
-To prevent magnitude explosion, the assignment matrix $\mathbf{S}$ is column-normalized, effectively computing the average feature vector for each cluster. This reduces the spatial dimension from $N$ to $K$, significantly lowering the computational cost for subsequent layers. The coordinates for the new level are similarly updated by computing the centroids of the clusters: $\mathbf{C}^{(l+1)} = (\mathbf{S}^{(l)})^\top \mathbf{C}^{(l)}$.
+To prevent magnitude explosion, the assignment matrix $\mathbf{S}$ is column-normalized, effectively computing the average feature vector for each cluster. This reduces the spatial dimension from $N$ to $K$, significantly lowering the computational cost for subsequent layers. The coordinates for the new level are similarly updated by computing the centroids of the clusters: $\mathbf{C}^{(l+1)} = (\mathbf{S}^{(l)})^\top \mathbf{C}^{(l)}$. To enhance robustness and prevent overfitting, we apply data augmentation during training by adding Gaussian noise to the normalized coordinates before clustering:
+\begin{equation}
+\mathbf{c}_i^{aug} = \mathbf{c}_i + \epsilon, \quad \epsilon \sim \mathcal{N}(0, \sigma^2)
+\end{equation}
+where $\sigma$ is the shift scale parameter.
 \begin{figure}[h]
     \centering
     \includegraphics[width=0.8\textwidth]{figures/pooling.pdf}
     \caption{Geometric Pooling Visualization. A diagram showing a set of scattered points (nodes) on a 2D plane. Circles delineate K-Means clusters. An arrow points to a smaller set of nodes representing the cluster centroids, illustrating the dimensionality reduction.}
     \label{fig:pooling}
 \end{figure}
-\subsection{Geo-Encoder-Decoder Backbone}
+\subsection{Geo-Encoder Backbone}
 At the heart of GeoDCD is a sequence-to-sequence architecture that models the temporal evolution of the system. We utilize a Causal Transformer, adapted from the standard Transformer architecture, to capture long-range temporal dependencies without suffering from the vanishing gradient problem common in Recurrent Neural Networks (RNNs).
 \subsubsection{Positional Encoding}
 Since Transformers are permutation-invariant, we must inject explicit temporal order information. We use sinusoidal positional encodings added to the input embeddings:
@@ -268,10 +272,14 @@ The forward pass for a single encoder layer is defined as:
 \mathbf{Z}' &= \text{MSA}(\text{LN}(\mathbf{Z})) + \mathbf{Z} \\
 \mathbf{Z}_{out} &= \text{FFN}(\text{LN}(\mathbf{Z}')) + \mathbf{Z}'
 \end{align}
-This design mitigates the risk of gradient vanishing in deep networks. The architecture acts as a temporal autoencoder:
+This design mitigates the risk of gradient vanishing in deep networks. The architecture consists of a temporal encoder with a prediction head:
 \begin{enumerate}
     \item \textbf{Encoder}: Maps the input sequence $\mathbf{X}$ to a latent dynamic representation $\mathbf{Z} \in \mathbb{R}^{B \times N \times L \times D_{model}}$.
-    \item \textbf{Decoder}: Receives the processed latent states and attempts to reconstruct the input sequence (Reconstruction) and predict the next time step (Forecasting).
+    \item \textbf{Prediction Head}: Forecasts the next time step directly from the encoded representations:
+    \begin{equation}
+    \hat{x}_{t+1} = \mathbf{W}_{pred} \mathbf{z}_{t} + \mathbf{b}_{pred}
+    \end{equation}
+    where $\mathbf{W}_{pred}$ and $\mathbf{b}_{pred}$ are the parameters of the linear prediction head.
 \end{enumerate}
 \subsection{Sparse Structural Learning via Basis Decomposition}
 A standard dense layer connecting $N$ nodes would require $N^2$ parameters, which is prohibitive. GeoDCD implements a novel Causal Graph Layer that learns the adjacency matrix efficiently.
@@ -292,9 +300,9 @@ The latent representation $\mathbf{Z}$ is propagated through this learned struct
 \begin{equation}
 \mathbf{Z}_{next} = \tanh(\mathbf{Z} \cdot \mathbf{W}_{eff})
 \end{equation}
-The training is guided by a composite loss function $\mathcal{L}_{total}$ that balances reconstruction accuracy, prediction fidelity, and structural sparsity:
+The training is guided by a composite loss function $\mathcal{L}_{total}$ that balances prediction accuracy and structural sparsity:
 \begin{equation}
-\mathcal{L}_{total} = \underbrace{\frac{1}{T}\sum_{t} ||x_t - \hat{x}_t^{rec}||^2}_{\text{Reconstruction Loss}} + \underbrace{\frac{1}{T}\sum_{t} ||x_{t+1} - \hat{x}_{t+1}^{pred}||^2}_{\text{Prediction Loss}} + \lambda_{L1} \underbrace{||\mathbf{A}_{learned}||_1}_{\text{Sparsity Loss}}
+\mathcal{L}_{total} = \underbrace{\frac{1}{T}\sum_{t} ||x_{t+1} - \hat{x}_{t+1}^{pred}||^2}_{\text{Prediction Loss}} + \lambda_{L1} \underbrace{||\mathbf{A}_{learned}||_1}_{\text{Sparsity Loss}}
 \end{equation}
 \begin{itemize}
     \item \textbf{Prediction Loss}: Directly implements the Neural Granger Causality principle—if node $j$ causes node $i$, the link $A_{ji}$ must be non-zero to minimize the prediction error of $x_{i, t+1}$.
