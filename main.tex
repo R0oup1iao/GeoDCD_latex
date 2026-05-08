@@ -320,13 +320,13 @@ The interaction strength between road segments is not static but fluctuates with
 We utilized the \textit{Beijing (BJ)} dataset to perform a deep-dive analysis of regime-dependent causality, focusing on the complex interplay between the ring roads.
 
 \textbf{Visualization of Regime Shifts.}
-Fig.~\ref{fig:case_study} (right panel) presents snapshots of the local causal graph at three distinct timestamps. 
+Fig.~\ref{fig:beijing_cases} (right panel) presents snapshots of the local causal graph at three distinct timestamps. 
 At $t_1$ (Free Flow), the graph is sparse, with nodes exhibiting self-loops (autoregressive dominance). 
 At $t_2$ (Congestion Onset), the graph densifies rapidly, revealing a strong directed chain of dependencies propagating from the interchange ramps onto the main ring road. 
 At $t_3$ (Dissipation), the structure relaxes back to sparsity. 
 Crucially, standard static causal discovery methods recover a dense "average" graph that conflates these distinct regimes, thereby failing to identify the critical tipping points. GeoDCD's ability to disentangle these phases offers a new tool for dynamic bottleneck diagnosis and potential intervention planning.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \begin{subfigure}[b]{0.8\textwidth}
         \centering
@@ -421,21 +421,21 @@ Finally, the \textit{w/o Basis Decomposition} variant failed to converge on the 
 
 
 
-\subsection{Assessment of Infrastructure Resilience via Causal Perturbation}
-A distinct advantage of causal models over purely associative forecasters is the capability to perform counterfactual reasoning,answering "what-if" questions regarding external shocks. To demonstrate GeoDCD's utility in resilience assessment, we designed a perturbation experiment on the Beijing traffic network.
+% \subsection{Assessment of Infrastructure Resilience via Causal Perturbation}
+% A distinct advantage of causal models over purely associative forecasters is the capability to perform counterfactual reasoning,answering "what-if" questions regarding external shocks. To demonstrate GeoDCD's utility in resilience assessment, we designed a perturbation experiment on the Beijing traffic network.
 
-We simulated a sudden breakdown (zero speed) at a critical hub on the 2nd Ring Road during off-peak hours and propagated this state through the learned dynamic graph. As shown in Fig.~\ref{fig:intervention}, GeoDCD accurately predicts the directional propagation of the resulting congestion queue, confining the impact to the immediate upstream segments (the "shadow" of the bottleneck). In contrast, a standard Correlation-based Transformer overestimates the systemic risk, erroneously predicting simultaneous slowdowns on parallel auxiliary roads due to historical spurious correlations. 
+% We simulated a sudden breakdown (zero speed) at a critical hub on the 2nd Ring Road during off-peak hours and propagated this state through the learned dynamic graph. As shown in Fig.~\ref{fig:intervention}, GeoDCD accurately predicts the directional propagation of the resulting congestion queue, confining the impact to the immediate upstream segments (the "shadow" of the bottleneck). In contrast, a standard Correlation-based Transformer overestimates the systemic risk, erroneously predicting simultaneous slowdowns on parallel auxiliary roads due to historical spurious correlations. 
 
-Quantitatively, we measured the \textit{Intervention Accuracy} by comparing the simulated shockwave speed against theoretical kinematic wave models. GeoDCD achieved a consistency score of 0.88, significantly surpassing the baseline (0.64). This result suggests that GeoDCD can serve as a reliable "digital twin" for stress-testing urban infrastructure, enabling planners to identify vulnerable nodes where local failures trigger cascading network paralysis.
+% Quantitatively, we measured the \textit{Intervention Accuracy} by comparing the simulated shockwave speed against theoretical kinematic wave models. GeoDCD achieved a consistency score of 0.88, significantly surpassing the baseline (0.64). This result suggests that GeoDCD can serve as a reliable "digital twin" for stress-testing urban infrastructure, enabling planners to identify vulnerable nodes where local failures trigger cascading network paralysis.
 
 
 
-\subsection{Robustness to Sensor Failure and Environmental Noise}
-Real-world urban sensing environments are notoriously imperfect, plagued by device outages and transmission noise. To evaluate GeoDCD's reliability under data scarcity, we conducted a stress test on the GBA dataset ($N=2,400$) by randomly masking a proportion of sensor nodes (from 10\% to 70\%) during inference.
+% \subsection{Robustness to Sensor Failure and Environmental Noise}
+% Real-world urban sensing environments are notoriously imperfect, plagued by device outages and transmission noise. To evaluate GeoDCD's reliability under data scarcity, we conducted a stress test on the GBA dataset ($N=2,400$) by randomly masking a proportion of sensor nodes (from 10\% to 70\%) during inference.
 
-Fig.~\ref{fig:robustness}a illustrates the performance degradation curve. While baseline methods (e.g., GTS, CUTS) suffer a precipitous drop in F1-Score when missing data exceeds 30\%, GeoDCD maintains 85\% of its structural recovery performance even with 50\% of sensors missing. This resilience is a direct consequence of the \textit{Hierarchical Geometric Pooling}: even when individual nodes are missing, the "patch-level" super-nodes remain robust, allowing the model to interpolate missing dynamics from spatially adjacent clusters.
+% Fig.~\ref{fig:robustness}a illustrates the performance degradation curve. While baseline methods (e.g., GTS, CUTS) suffer a precipitous drop in F1-Score when missing data exceeds 30\%, GeoDCD maintains 85\% of its structural recovery performance even with 50\% of sensors missing. This resilience is a direct consequence of the \textit{Hierarchical Geometric Pooling}: even when individual nodes are missing, the "patch-level" super-nodes remain robust, allowing the model to interpolate missing dynamics from spatially adjacent clusters.
 
-Furthermore, we tested sensitivity to input noise by injecting Gaussian perturbations ($\mathcal{N}(0, \sigma^2)$). As shown in Fig.~\ref{fig:robustness}b, GeoDCD exhibits a stable error profile, whereas linear baselines (VAR) degrade exponentially. This confirms that our geometric constraints act as an effective regularizer, filtering out high-frequency noise that lacks spatial coherence.
+% Furthermore, we tested sensitivity to input noise by injecting Gaussian perturbations ($\mathcal{N}(0, \sigma^2)$). As shown in Fig.~\ref{fig:robustness}b, GeoDCD exhibits a stable error profile, whereas linear baselines (VAR) degrade exponentially. This confirms that our geometric constraints act as an effective regularizer, filtering out high-frequency noise that lacks spatial coherence.
 
 
 
@@ -503,7 +503,7 @@ Geospatial systems are typically characterized by high dimensionality ($N \gg T$
 \subsection{Overall Workflow Architecture}
 The GeoDCD framework operates as a unified, end-to-end deep learning pipeline. It accepts raw multivariate time-series data and their associated spatial coordinates as input and produces both a static causal graph (representing long-term structural dependencies) and a dynamic causal tensor (representing instantaneous interaction strengths). The methodology is structured into five sequential components, each addressing a specific aspect of the spatiotemporal causal discovery problem.
 The pipeline is composed of five sequential components: (1) \textbf{Spatiotemporal Data Ingestion}, which handles preprocessing and tensor construction; (2) \textbf{Hierarchical Geometric Pooling}, performing bottom-up spatial aggregation; (3) \textbf{Geo-Encoder Backbone}, modeling latent dynamics via Transformers; (4) \textbf{Sparse Structural Learning}, estimating the adjacency matrix via Basis Decomposition; and (5) \textbf{Dynamic Inference \& Jacobian Analysis}, extracting time-varying causal graphs.
-\begin{figure}[h]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=0.8\textwidth]{figures/overview.pdf}
     \caption{Overall Workflow of GeoDCD. Top: Raw grid data. Middle: The Hierarchy (Level 0 $\to$ Level 1) showing nodes merging into patches. Bottom: The Network Architecture (Encoder $\to$ Graph Layer $\to$ Prediction). Arrows indicate the forward pass.}
