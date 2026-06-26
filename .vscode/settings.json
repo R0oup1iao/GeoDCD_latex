@@ -54,6 +54,12 @@
     ],
     "latex-workshop.latex.recipes": [
         {
+            "name": "LaTeXmk",
+            "tools": [
+                "latexmk"
+            ]
+        },
+        {
             "name": "XeLaTeX -> Biber -> XeLaTeX*2", 
             "tools": [
                 "xelatex",
@@ -69,12 +75,6 @@
                 "biber",
                 "pdflatex",
                 "pdflatex"
-            ]
-        },
-        {
-            "name": "LaTeXmk",
-            "tools": [
-                "latexmk"
             ]
         },
         {
