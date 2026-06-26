@@ -80,16 +80,16 @@ In this work, we introduce a unified deep learning framework for causal inferenc
 \label{sec:results}
 
 \subsection{The GeoDCD Framework for Scalable Causal Inference}
-Current approaches to urban causal discovery are often caught in a dichotomy: they either rely on interpretable but unscalable linear models, or deploy powerful deep learning architectures that function as "black boxes," obscuring the underlying physical mechanisms. To bridge this gap, we introduce \textbf{GeoDCD} (Geometric Dynamic Causal Discovery), a framework explicitly designed to exploit the spatial inductive biases inherent in physical systems. 
+Current approaches to uncovering dynamic causality in large-scale complex systems often fall short. They typically rely on flat modeling that scales poorly as $O(N^2)$, assume static causality that misses temporal regime shifts, or lack geometric constraints, which yields many spurious connections. To bridge this gap, we introduce \textbf{GeoDCD}, a general framework explicitly designed for scalable, geometry-aware discovery of time-varying causal structures.
 
-As illustrated in Fig.~\ref{fig:workflow}, the architecture departs from treating variables as exchangeable nodes in a flat graph. Instead, we formalize the causal discovery problem as a geometry-constrained optimization task. The workflow initiates with a \textit{Hierarchical Geometric Pooling} mechanism (Fig.~\ref{fig:workflow}a), which utilizes the raw coordinate matrix $\mathcal{C} \in \mathbb{R}^{N \times 2}$ to aggregate spatially proximal sensors into coherent "super-nodes." This step is mathematically critical: it transforms the global search space from an intractable quadratic complexity $O(N^2)$ to a manageable near-linear scale, effectively pruning physically impossible long-range instantaneous links before the inference even begins.
+As illustrated in Fig.~\ref{fig:workflow}, our solution addresses the challenges of high-dimensional dynamic observations (Fig.~\ref{fig:workflow}a). Instead of treating variables as exchangeable nodes in a flat graph, GeoDCD leverages a geometry-aware, hierarchical representation (Fig.~\ref{fig:workflow}b). This organization encodes the underlying spatial/physical manifold and captures interactions across multiple scales---from local (Level 0) to global (Level 2). By incorporating geometric and hierarchical constraints, the framework significantly limits the search space (Fig.~\ref{fig:workflow}c), dropping the edge complexity from an intractable $O(N^2)$ to a scalable $O(kN \log N)$ (where $k \ll N$).
 
-Following this spatial reduction, the latent representations are processed by a \textit{Geo-Encoder Backbone} (Fig.~\ref{fig:workflow}b) equipped with causal attention masks. Unlike standard Transformers that allow bidirectional information flow, our design strictly respects temporal causality, ensuring that the state at time $t$ is conditioned solely on history $t' < t$. Finally, to capture the regime-dependent nature of urban flows,where interaction rules shift between free-flow and congestion,we introduce a \textit{Jacobian-based Dynamic Inference} module (Fig.~\ref{fig:workflow}c). By computing the sensitivity of the output $\hat{x}_{t+1}$ with respect to the input $x_t$, we extract a time-varying causal adjacency tensor $\mathcal{S}_t$, offering a transparent window into the evolving system dynamics.
+This structural innovation enables precise dynamic causal inference, estimating time-varying causal graphs that accurately capture temporal regime shifts---such as topological shifts between El Ni\~no and La Ni\~na states---without being overwhelmed by false links. Ultimately, GeoDCD reveals interpretable, time-varying causal mechanisms (Fig.~\ref{fig:workflow}d) and demonstrates broad applicability across diverse systems, including climate, urban traffic, and energy-mobility networks (Fig.~\ref{fig:workflow}e).
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\textwidth]{figures/overview.pdf} 
-    \caption{\textbf{Overview of the GeoDCD Framework.} \textbf{a,} The Hierarchical Geometric Pooling mechanism clusters $N$ sensors into $K$ patches based on spatial coordinates, creating a multi-scale representation pyramid. \textbf{b,} The Geo-Encoder Backbone utilizes a modified Causal Transformer to model non-linear temporal dependencies within and between patches. \textbf{c,} The Dynamic Inference module computes the Jacobian matrix of the prediction head, extracting the instantaneous causal strength $\mathcal{S}_{i \leftarrow j}(t)$ for each time step. The bottom panel visualizes the effective receptive field, demonstrating how geometric constraints suppress spurious long-range correlations.}
+    \includegraphics[width=\textwidth]{figures/workflow.png} 
+    \caption{\textbf{Overview of the GeoDCD Framework.} \textbf{a,} The challenge of uncovering dynamic causality in complex systems, highlighting the shortcomings of flat, static modeling. \textbf{b,} Our GeoDCD solution utilizes geometry-aware representations and hierarchical organization to perform dynamic causal inference across local, regional, and global levels. \textbf{c,} The key innovation involves geometric and hierarchical constraints that reduce the search space complexity from $O(N^2)$ to $O(kN \log N)$, significantly enhancing scalability and accuracy. \textbf{d,} GeoDCD reveals interpretable time-varying mechanisms, demonstrated by tracking topological shifts in climate teleconnection networks. \textbf{e,} Broad applicability of the framework across diverse domains such as climate systems, urban mobility, and ecology.}
     \label{fig:workflow}
 \end{figure}
 
@@ -133,42 +133,14 @@ Performance on synthetic benchmarks demonstrates the critical advantage of expli
 
 In chaotic environments such as \textit{Lorenz-96}, traditional linear methods like GVAR fail to capture the underlying topology (F1: 0.42), whereas deep learning baselines (e.g., CUTS+, Causalformer) significantly improve recovery by modeling nonlinear dependencies. However, \textbf{GeoDCD} achieves superior precision (F1: \textbf{0.99}, SHD: \textbf{9.6}), surpassing Causalformer (F1: 0.95, SHD: 15.2). This represents a \textbf{36.8\% reduction} in Structural Hamming Distance (SHD) compared to the runner-up, confirming the efficacy of geometric constraints in chaotic regimes. This performance gap is further amplified in the \textit{Cluster-Lorenz} dataset, where spatially heterogeneous interactions dominate. While clustering-based methods like UnCLE implicitly infer group structures (F1: 0.89), GeoDCD exploits the explicit geometric manifold to distinguish intra-cluster couplings from inter-cluster noise more effectively (F1: \textbf{0.95}), confirming that geometric constraints provide a sharper learning signal than purely data-driven topology inference.
 
-Beyond spatially structured domains, GeoDCD exhibits remarkable generalizability and robustness. On the linear \textit{VAR} dataset, the model performs on par with linear baselines and Causalformer (F1: $\sim$0.73), indicating that its continuous optimization framework avoids overfitting simple linear mechanisms. Most critically, we evaluated the model's resilience on the \textit{Finance} dataset by assigning random virtual coordinates, treating geometry as adversarial noise. Despite the absence of valid spatial guidance, GeoDCD achieved an F1-Score of \textbf{0.78} and an AUROC of \textbf{0.96}, significantly outperforming domain-agnostic SOTA methods like Causalformer (F1: 0.72) and CUTS+ (F1: 0.70). This counter-intuitive result suggests that GeoDCD functions as a dual-mode learner: it leverages geometric priors when informative, but seamlessly transitions to extracting intrinsic topology from time-series dynamics when spatial signals are uninformative, acting as a robust general-purpose causal discovery framework.
+Beyond spatially structured domains, GeoDCD exhibits remarkable generalizability and robustness (Fig.~\ref{fig:synthetic_large_bars}). On the linear \textit{VAR} dataset, the model performs on par with linear baselines and Causalformer (F1: $\sim$0.73), indicating that its continuous optimization framework avoids overfitting simple linear mechanisms. Most critically, we evaluated the model's resilience on the \textit{Finance} dataset by assigning random virtual coordinates, treating geometry as adversarial noise. Despite the absence of valid spatial guidance, GeoDCD achieved an F1-Score of \textbf{0.78} and an AUROC of \textbf{0.96}, significantly outperforming domain-agnostic SOTA methods like Causalformer (F1: 0.72) and CUTS+ (F1: 0.70). This counter-intuitive result suggests that GeoDCD functions as a dual-mode learner: it leverages geometric priors when informative, but seamlessly transitions to extracting intrinsic topology from time-series dynamics when spatial signals are uninformative, acting as a robust general-purpose causal discovery framework.
 
-\begin{table}[h]
+\begin{figure}[htbp]
     \centering
-    \caption{\textbf{Comparative performance on large-scale synthetic benchmarks ($N \ge 100$).} We report AUROC ($\uparrow$), F1-Score ($\uparrow$), and Structural Hamming Distance (SHD, $\downarrow$). Results are presented as mean $\pm$ std over 5 runs. Traditional constraint-based methods (e.g., PC, PCMCI) are omitted due to scalability issues on high-dimensional graphs. \textbf{GeoDCD} demonstrates superior structure recovery and stability, particularly in complex dynamics (Lorenz-96) and spatial clusters.}
-    \label{tab:synthetic_large}
-    \resizebox{\textwidth}{!}{
-    \begin{tabular}{lcccccccccccc}
-        \toprule
-        \multirow{2}{*}{\textbf{Method}} & \multicolumn{3}{c}{\textbf{VAR (Linear)}} & \multicolumn{3}{c}{\textbf{Lorenz-96 (Chaotic)}} & \multicolumn{3}{c}{\textbf{Cluster-Lorenz (Spatial)}} & \multicolumn{3}{c}{\textbf{Finance (Non-Spatial)}} \\
-        \cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} \cmidrule(lr){11-13}
-        & AUROC $\uparrow$ & F1 $\uparrow$ & SHD $\downarrow$ & AUROC $\uparrow$ & F1 $\uparrow$ & SHD $\downarrow$ & AUROC $\uparrow$ & F1 $\uparrow$ & SHD $\downarrow$ & AUROC $\uparrow$ & F1 $\uparrow$ & SHD $\downarrow$ \\
-        \midrule
-        % Linear Baseline
-        GVAR & 0.88{\scriptsize$\pm$0.01} & 0.71{\scriptsize$\pm$0.02} & 210.5{\scriptsize$\pm$12.1} & 0.55{\scriptsize$\pm$0.02} & 0.42{\scriptsize$\pm$0.03} & 188.4{\scriptsize$\pm$15.2} & 0.52{\scriptsize$\pm$0.03} & 0.38{\scriptsize$\pm$0.04} & 255.1{\scriptsize$\pm$20.5} & 0.51{\scriptsize$\pm$0.01} & 0.45{\scriptsize$\pm$0.03} & 150.2{\scriptsize$\pm$10.8} \\
-        
-        % Traditional Neural
-        cMLP & 0.72{\scriptsize$\pm$0.03} & 0.58{\scriptsize$\pm$0.04} & 285.3{\scriptsize$\pm$22.5} & 0.78{\scriptsize$\pm$0.04} & 0.65{\scriptsize$\pm$0.05} & 85.2{\scriptsize$\pm$10.1} & 0.65{\scriptsize$\pm$0.05} & 0.55{\scriptsize$\pm$0.06} & 112.5{\scriptsize$\pm$18.3} & 0.68{\scriptsize$\pm$0.04} & 0.52{\scriptsize$\pm$0.05} & 95.6{\scriptsize$\pm$12.4} \\
-        cLSTM & 0.75{\scriptsize$\pm$0.04} & 0.61{\scriptsize$\pm$0.05} & 270.8{\scriptsize$\pm$18.4} & 0.81{\scriptsize$\pm$0.03} & 0.69{\scriptsize$\pm$0.04} & 72.5{\scriptsize$\pm$8.6} & 0.69{\scriptsize$\pm$0.04} & 0.59{\scriptsize$\pm$0.05} & 105.3{\scriptsize$\pm$14.2} & 0.70{\scriptsize$\pm$0.03} & 0.55{\scriptsize$\pm$0.04} & 88.2{\scriptsize$\pm$10.1} \\
-        TCDF & 0.78{\scriptsize$\pm$0.02} & 0.64{\scriptsize$\pm$0.03} & 255.4{\scriptsize$\pm$15.0} & 0.83{\scriptsize$\pm$0.02} & 0.71{\scriptsize$\pm$0.03} & 65.1{\scriptsize$\pm$7.2} & 0.72{\scriptsize$\pm$0.03} & 0.63{\scriptsize$\pm$0.04} & 92.4{\scriptsize$\pm$12.5} & 0.75{\scriptsize$\pm$0.02} & 0.58{\scriptsize$\pm$0.03} & 82.5{\scriptsize$\pm$8.4} \\
-        eSRU & 0.74{\scriptsize$\pm$0.03} & 0.60{\scriptsize$\pm$0.04} & 275.6{\scriptsize$\pm$19.2} & 0.79{\scriptsize$\pm$0.03} & 0.68{\scriptsize$\pm$0.05} & 78.4{\scriptsize$\pm$9.5} & 0.68{\scriptsize$\pm$0.04} & 0.57{\scriptsize$\pm$0.06} & 108.7{\scriptsize$\pm$15.1} & 0.71{\scriptsize$\pm$0.03} & 0.54{\scriptsize$\pm$0.05} & 90.1{\scriptsize$\pm$11.3} \\
-        
-        % Modern Neural
-        NAVAR (MLP) & 0.81{\scriptsize$\pm$0.02} & 0.68{\scriptsize$\pm$0.03} & 230.1{\scriptsize$\pm$14.5} & 0.85{\scriptsize$\pm$0.02} & 0.76{\scriptsize$\pm$0.03} & 45.2{\scriptsize$\pm$5.8} & 0.78{\scriptsize$\pm$0.03} & 0.69{\scriptsize$\pm$0.04} & 82.5{\scriptsize$\pm$10.2} & 0.80{\scriptsize$\pm$0.02} & 0.62{\scriptsize$\pm$0.03} & 75.3{\scriptsize$\pm$9.2} \\
-        NAVAR (LSTM) & 0.83{\scriptsize$\pm$0.02} & 0.69{\scriptsize$\pm$0.03} & 225.4{\scriptsize$\pm$13.8} & 0.88{\scriptsize$\pm$0.02} & 0.79{\scriptsize$\pm$0.03} & 38.5{\scriptsize$\pm$6.2} & 0.81{\scriptsize$\pm$0.03} & 0.72{\scriptsize$\pm$0.04} & 75.8{\scriptsize$\pm$9.5} & 0.82{\scriptsize$\pm$0.02} & 0.65{\scriptsize$\pm$0.03} & 68.4{\scriptsize$\pm$8.1} \\
-        CUTS+ & 0.86{\scriptsize$\pm$0.02} & 0.72{\scriptsize$\pm$0.02} & 215.2{\scriptsize$\pm$11.5} & 0.94{\scriptsize$\pm$0.01} & 0.88{\scriptsize$\pm$0.02} & 25.4{\scriptsize$\pm$4.5} & 0.90{\scriptsize$\pm$0.02} & 0.82{\scriptsize$\pm$0.03} & 58.2{\scriptsize$\pm$8.4} & 0.88{\scriptsize$\pm$0.02} & 0.70{\scriptsize$\pm$0.04} & 45.6{\scriptsize$\pm$6.5} \\
-        UnCLE & 0.85{\scriptsize$\pm$0.02} & 0.70{\scriptsize$\pm$0.03} & 222.8{\scriptsize$\pm$12.5} & 0.92{\scriptsize$\pm$0.02} & 0.85{\scriptsize$\pm$0.03} & 29.8{\scriptsize$\pm$5.1} & 0.96{\scriptsize$\pm$0.01} & 0.89{\scriptsize$\pm$0.03} & 48.5{\scriptsize$\pm$7.2} & 0.85{\scriptsize$\pm$0.02} & 0.68{\scriptsize$\pm$0.04} & 52.3{\scriptsize$\pm$7.8} \\
-        Causalformer & 0.89{\scriptsize$\pm$0.01} & \textbf{0.74{\scriptsize$\pm$0.02}} & 208.5{\scriptsize$\pm$10.4} & 0.98{\scriptsize$\pm$0.01} & 0.95{\scriptsize$\pm$0.02} & 15.2{\scriptsize$\pm$3.5} & 0.94{\scriptsize$\pm$0.02} & 0.91{\scriptsize$\pm$0.03} & 42.6{\scriptsize$\pm$6.8} & 0.92{\scriptsize$\pm$0.02} & 0.72{\scriptsize$\pm$0.03} & 35.8{\scriptsize$\pm$5.4} \\
-        
-        \midrule
-        % Ours
-        \textbf{GeoDCD (Ours)} & \textbf{0.91{\scriptsize$\pm$0.01}} & 0.73{\scriptsize$\pm$0.01} & \textbf{205.2{\scriptsize$\pm$10.2}} & \textbf{1.00{\scriptsize$\pm$0.00}} & \textbf{0.99{\scriptsize$\pm$0.02}} & \textbf{9.6{\scriptsize$\pm$19.8}} & \textbf{1.00{\scriptsize$\pm$0.00}} & \textbf{0.95{\scriptsize$\pm$0.06}} & \textbf{36.8{\scriptsize$\pm$48.8}} & \textbf{0.96{\scriptsize$\pm$0.06}} & \textbf{0.78{\scriptsize$\pm$0.18}} & \textbf{11.5{\scriptsize$\pm$12.3}} \\
-        \bottomrule
-    \end{tabular}
-    }
-\end{table}
+    \includegraphics[width=\textwidth]{figures/synthetic_large_bars.pdf}
+    \caption{\textbf{Comparative performance on large-scale synthetic benchmarks ($N \ge 100$).} Grouped bars show AUROC ($\uparrow$), F1-Score ($\uparrow$), and Structural Hamming Distance (SHD, $\downarrow$) across four benchmark families. Black markers indicate the best-performing method for each dataset--metric pair. Traditional constraint-based methods are omitted due to scalability limits on high-dimensional graphs.}
+    \label{fig:synthetic_large_bars}
+\end{figure}
 
 
 \subsection{Retrieving Verified Teleconnections from a 10,512-Node Climate Grid}
@@ -218,24 +190,6 @@ As visualized in Fig.~\ref{fig:scalability}, the computational cost of tradition
     \label{fig:scalability}
 \end{figure}
 
-\begin{table}[h]
-    \centering
-    \caption{\textbf{Forecasting accuracy (RMSE) on citywide traffic networks.} Comparison against state-of-the-art forecasting baselines. GeoDCD demonstrates consistent stability and superior accuracy from medium-scale (SD) to mega-scale (GLA) networks.}
-    \label{tab:realworld}
-    \begin{tabular}{lcccc}
-        \toprule
-        \textbf{Method} & \textbf{SD} ($N=716$) & \textbf{BJ} ($N=513$) & \textbf{GBA} ($N=2,352$) & \textbf{GLA} ($N=3,834$) \\
-        \midrule
-        VAR (Linear) & 5.12 & 28.45 & 21.10 & 15.60 \\
-        DCRNN & 4.52 & 24.15 & 18.33 & OOM \\
-        GWN & 4.38 & 23.50 & 17.85 & 12.45 \\
-        GTS & 4.41 & 23.88 & OOM & OOM \\
-        \midrule
-        \textbf{GeoDCD (Ours)} & \textbf{4.12} & \textbf{22.40} & \textbf{16.92} & \textbf{11.30} \\
-        \textit{Improv.} & \textit{+5.9\%} & \textit{+4.7\%} & \textit{+5.2\%} & \textit{+9.2\%} \\
-        \bottomrule
-    \end{tabular}
-\end{table}
 
 \subsection{Unraveling Transient Congestion Dynamics in Urban Flows}
 The true scientific utility of GeoDCD lies in its ability to move beyond static correlations and unveil the time-varying causal mechanisms driving urban dynamics. 
@@ -245,36 +199,8 @@ As shown in Fig.~\ref{fig:cluster_analysis}, the model's learned geometric embed
 
 \begin{figure}[htbp]
     \centering
-    \begin{subfigure}[b]{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/SD_clusters.pdf}
-        \caption{SD Clustering}
-        \label{fig:sd_cluster}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/GD513_clusters.pdf}
-        \caption{BJ Clustering}
-        \label{fig:bj_cluster}
-    \end{subfigure}
-    
-    \vspace{0.2cm}
-    
-    \begin{subfigure}[b]{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/GLA_clusters.pdf}
-        \caption{GLA Clustering}
-        \label{fig:gla_cluster}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/GBA_clusters.pdf}
-        \caption{GBA Clustering}
-        \label{fig:gba_cluster}
-    \end{subfigure}
-    \caption{\textbf{Visualization of node geometric embeddings across four real-world datasets.} The learned clusters align with the physical road network topology, enabling efficient hierarchical causal discovery.}
+    \includegraphics[width=\textwidth]{figures/urban_cluster_maps.pdf}
+    \caption{\textbf{Geometric clustering on citywide traffic networks.} \textbf{a,} San Diego ($N=716$). \textbf{b,} Beijing ($N=513$). \textbf{c,} Greater Los Angeles ($N=3{,}834$). \textbf{d,} Greater Bay Area ($N=2{,}352$). Nodes are coloured by cluster assignment from hierarchical geometric pooling; map backgrounds show the underlying geography. The learned clusters align with physical road corridors and administrative boundaries, confirming that coordinate-driven aggregation captures functionally coherent spatial units.}
     \label{fig:cluster_analysis}
 \end{figure}
 
@@ -283,36 +209,8 @@ The interaction strength between road segments is not static but fluctuates with
 
 \begin{figure}[htbp]
     \centering
-    \begin{subfigure}[b]{\textwidth}
-        \centering
-        \includegraphics[width=0.24\textwidth]{figures/sd_dynamic_t1.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/sd_dynamic_t2.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/sd_dynamic_t3.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/sd_dynamic_t4.pdf} \\
-        \vspace{1mm}
-        \includegraphics[width=0.24\textwidth]{figures/sd_dynamic_t5.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/sd_dynamic_t6.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/sd_dynamic_t7.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/sd_dynamic_t8.pdf}
-        \caption{SD Dataset Causal Evolution}
-        \label{fig:sd_dynamic}
-    \end{subfigure}
-    \vspace{0.3cm}
-    \begin{subfigure}[b]{\textwidth}
-        \centering
-        \includegraphics[width=0.24\textwidth]{figures/gd513_dynamic_t1.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/gd513_dynamic_t2.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/gd513_dynamic_t3.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/gd513_dynamic_t4.pdf} \\
-        \vspace{1mm}
-        \includegraphics[width=0.24\textwidth]{figures/gd513_dynamic_t5.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/gd513_dynamic_t6.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/gd513_dynamic_t7.pdf}
-        \includegraphics[width=0.24\textwidth]{figures/gd513_dynamic_t8.pdf}
-        \caption{BJ Dataset Causal Evolution}
-        \label{fig:bj_dynamic}
-    \end{subfigure}
-    \caption{\textbf{Time-varying causal intensity tensors.} Snapshots at eight consecutive intervals show the dynamic shifting of causal weights as the system transitions between different traffic regimes.}
+    \includegraphics[width=\textwidth]{figures/dynamic_causal_intensity.pdf}
+    \caption{\textbf{Cluster-ordered dynamic causal intensity.} \textbf{a,} San Diego ($N=716$). \textbf{b,} Beijing ($N=513$). Rows represent individual nodes reordered by cluster membership; columns correspond to eight consecutive inference windows. Colour intensity encodes the node-level causal out-degree at each time step. The emergent block-diagonal pattern confirms that intra-cluster causal coupling is substantially stronger than inter-cluster interactions, while temporal fluctuations in intensity reflect regime-dependent activation of different spatial modules.}
     \label{fig:dynamic_intensity}
 \end{figure}
 
@@ -320,35 +218,16 @@ The interaction strength between road segments is not static but fluctuates with
 We utilized the \textit{Beijing (BJ)} dataset to perform a deep-dive analysis of regime-dependent causality, focusing on the complex interplay between the ring roads.
 
 \textbf{Visualization of Regime Shifts.}
-Fig.~\ref{fig:beijing_cases} (right panel) presents snapshots of the local causal graph at three distinct timestamps. 
-At $t_1$ (Free Flow), the graph is sparse, with nodes exhibiting self-loops (autoregressive dominance). 
-At $t_2$ (Congestion Onset), the graph densifies rapidly, revealing a strong directed chain of dependencies propagating from the interchange ramps onto the main ring road. 
-At $t_3$ (Dissipation), the structure relaxes back to sparsity. 
+Fig.~\ref{fig:beijing_cases} presents snapshots of the inferred causal graph across three distinct traffic regimes. 
+At \textbf{a} (Midnight), the network is highly sparse, dominated by autoregressive self-loops on peripheral logistics highways. 
+At \textbf{b} (Morning Rush), the graph densifies dramatically, revealing centripetal dependencies that propagate from the suburbs and ring-road interchanges toward the urban core. 
+At \textbf{c} (Evening Rush), the causal directionality reverses, showing a centrifugal pattern where congestion dissipation propagates outward along radial arterial corridors. 
 Crucially, standard static causal discovery methods recover a dense "average" graph that conflates these distinct regimes, thereby failing to identify the critical tipping points. GeoDCD's ability to disentangle these phases offers a new tool for dynamic bottleneck diagnosis and potential intervention planning.
 
 \begin{figure}[htbp]
     \centering
-    \begin{subfigure}[b]{0.8\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/beijing_12_1.png}
-        \caption{Midnight (0:00 - 1:00)}
-        \label{fig:bj_midnight}
-    \end{subfigure}
-    \vspace{0.2cm}
-    \begin{subfigure}[b]{0.8\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/beijing_730_830.png}
-        \caption{Morning Rush (7:30 - 8:30)}
-        \label{fig:bj_morning}
-    \end{subfigure}
-    \vspace{0.2cm}
-    \begin{subfigure}[b]{0.8\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/beijing_6_7.png}
-        \caption{Evening Rush (18:00 - 19:00)}
-        \label{fig:bj_evening}
-    \end{subfigure}
-    \caption{\textbf{Spatio-temporal distribution of causal links in Beijing.} At midnight, causal activity is sparse, concentrated on key logistics corridors like the Airport Expressway. During rush hours, the network densifies, showing a distinct "tidal" pattern: centripetal congestion propagation in the morning (towards the city center) and centrifugal dissipation in the evening.}
+    \includegraphics[width=\textwidth]{figures/beijing_causal_map.pdf}
+    \caption{\textbf{Regime-dependent causal topology in Beijing ($N=513$).} \textbf{a,} Midnight: the causal graph is sparse, dominated by autoregressive self-links on logistics corridors. \textbf{b,} Morning rush: the network densifies sharply, revealing centripetal congestion propagation from ring-road interchanges toward the city centre. \textbf{c,} Evening rush: causal links reverse direction, showing centrifugal dissipation outward along arterial corridors. Arrow colour and width encode relative causal link strength. Map background shows the Beijing road network geography.}
     \label{fig:beijing_cases}
 \end{figure}
 
@@ -397,27 +276,7 @@ To further decompose the directionality of cross-modal coupling, we computed the
     \label{fig:evcdp_drivers}
 \end{figure}
 
-\subsection{Ablation Study: Dissecting Geometric and Dynamic Modules}
-To ensure that the performance gains are not artifacts of hyperparameter tuning, we performed a rigorous ablation study on the Cluster-Lorenz and BJ datasets. We investigated three variants: (1) \textit{w/o Spatial Priors}, where the hierarchical pooling is replaced by a standard flat attention mechanism; (2) \textit{w/o Dynamic Inference}, which learns a single static adjacency matrix; and (3) \textit{w/o Basis Decomposition}, which uses full-rank weight matrices.
-
-\begin{table}[h]
-    \centering
-    \caption{\textbf{Ablation study on Cluster-Lorenz and BJ datasets.} Relative performance drop (in \%) when removing key components of the GeoDCD framework. The "Spatial Priors" (Geometric Pooling) are shown to be the most critical factor for structural recovery (F1-Score), while "Dynamic Inference" is essential for minimizing forecasting error (RMSE) in non-stationary regimes.}
-    \label{tab:ablation}
-    \begin{tabular}{lcc}
-        \hline
-        \textbf{Model Variant} & \textbf{F1-Score Drop} & \textbf{RMSE Increase} \\ \hline
-        Full GeoDCD & -- & -- \\ \hline
-        w/o Spatial Priors (Flat Attention) & -15.7\% & -- \\
-        w/o Dynamic Inference (Static) & -- & +8.9\% \\
-        w/o Basis Decomposition & Convergence Failure & -- \\ \hline
-    \end{tabular}
-\end{table}
-
-The results, summarized in Table~\ref{tab:ablation}, provide compelling evidence for our design choices.
-Removing the \textit{Spatial Priors} resulted in the most catastrophic degradation, with a 15.7\% drop in F1-Score on Cluster-Lorenz. Visual inspection of the learned graphs revealed that without geometric constraints, the model overfits to spurious correlations between distant clusters, confirming the hypothesis that geometry acts as a necessary regularizer in high-dimensional spaces.
-Excluding the \textit{Dynamic Inference} module led to an 8.9\% increase in forecasting error (RMSE) during peak hours on the BJ dataset. This confirms that a static graph is insufficient to model the non-stationary nature of traffic, where mechanisms are state-dependent.
-Finally, the \textit{w/o Basis Decomposition} variant failed to converge on the larger BJ dataset due to parameter explosion, underscoring the necessity of low-rank approximations for scalability.
+A comprehensive ablation study dissecting the contribution of each architectural component---including geometric pooling, dynamic inference, and basis decomposition---is provided in the Supplementary Materials (Table~S1).
 
 
 
