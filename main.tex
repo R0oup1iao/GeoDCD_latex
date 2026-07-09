@@ -14,7 +14,7 @@
 \linenumbers
 
 
-%%%%%% Bibliography %%%%%%
+%%%%%% Biblioography %%%%%%
 % Replace "sample" in the \addbibresource line below with the name of your .bib file.
 \usepackage[style=nejm, 
 citestyle=numeric-comp,
@@ -111,7 +111,7 @@ A key capability of GeoDCD is capturing how causal topologies reorganize across 
 \end{figure}
 
 \subsection{Decoupling Cross-Modal Causal Feedbacks in Urban Infrastructure Networks}
-Real-world urban systems are characterized by tightly coupled infrastructure subsystems whose interactions yield complex feedback loops. To evaluate GeoDCD's performance in multi-modal environments, we deployed the framework on the ST-EVCDP dataset covering Shenzhen, China. We constructed a dual-modality network of $N=494$ nodes by pairing road traffic occupancy and electric vehicle (EV) charging energy volume across 247 traffic analysis zones (TAZs), with shared geographic coordinates serving as the geometric prior.
+Real-world urban systems are characterized by tightly coupled infrastructure subsystems whose interactions yield complex feedback loops. To evaluate GeoDCD's performance in multi-modal environments, we deployed the framework on the ST-EVCDP dataset covering Shenzhen, China. We constructed a dual-modality network of $N=494$ nodes by pairing charging pile occupancy and EV charging energy volume (kWh) across 247 traffic analysis zones (TAZs). Shared geographic coordinates serve as the geometric prior.
 
 \textbf{Asymmetric Bidirectional Coupling.}
 As visualized in Fig.~\ref{fig:cross_modal_multi}a, GeoDCD successfully decouples Traffic $\to$ Energy and Energy $\to$ Traffic causal links overlaying the physical road network. The cumulative causal impact exhibits a striking spatial asymmetry (Fig.~\ref{fig:cross_modal_multi}c,d). Major energy-to-traffic causal hubs (where charging load fluctuations trigger local traffic anomalies) cluster in the high-density western urban core (Nanshan and Futian districts). Conversely, dominant traffic-to-energy drivers (where elevated road occupancy redirects downstream charging behaviors) populate the eastern transportation corridors (Luohu and Longgang). This spatial segregation reveals distinct functional zones that operate either as traffic-driven or energy-driven subsystems.
@@ -177,36 +177,10 @@ A critical risk of integrating geometric priors is the potential to overfit to u
 
 \begin{figure}[htbp]
     \centering
-    \begin{subfigure}[b]{0.23\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/synthetic_var.pdf}
-        \caption{VAR Dataset}
-        \label{fig:synthetic_var}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.23\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/synthetic_lorenz96.pdf}
-        \caption{Lorenz-96 Dataset}
-        \label{fig:synthetic_lorenz96}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.23\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/synthetic_cluster_lorenz.pdf}
-        \caption{Cluster-Lorenz Dataset}
-        \label{fig:synthetic_cluster}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.23\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/synthetic_finance.pdf}
-        \caption{Finance Dataset (Virtual Coordinates)}
-        \label{fig:synthetic_finance}
-    \end{subfigure}
-    
+    \includegraphics[width=0.95\textwidth]{figures/synthetic_spatial_layouts.pdf}
+
     \vspace{0.3cm}
-    
+
     \begin{subfigure}[b]{0.95\textwidth}
         \centering
         \includegraphics[width=\textwidth]{figures/synthetic_large_bars.pdf}
@@ -399,7 +373,7 @@ We apply GeoDCD to ERA5 reanalysis sea-level pressure (SLP) data at $2.5^\circ \
 We evaluate on four city-scale traffic networks of increasing magnitude: \textit{San Diego} (SD, $N=716$ sensors from PeMS D8), \textit{Beijing} (BJ, $N=513$ nodes partitioned across ring roads and arterial streets), \textit{Greater Bay Area} (GBA, $N=2{,}352$ sensors spanning 11 municipalities in southern China), and \textit{Greater Los Angeles} (GLA, $N=3{,}834$ nodes from Caltrans detectors). For each dataset we construct sliding windows of length $L=12$ with stride 6, yielding overlapping training sequences. A temporal split of 70\%/15\%/15\% is applied for train/validation/test sets, preserving chronological order to prevent data leakage.
 
 \paragraph{Cross-modal urban dataset.}
-The ST-EVCDP dataset covers Shenzhen, China, where 18,061 public EV charging stations are aggregated into 247 traffic analysis zones (TAZs). Each TAZ records both road occupancy and charging energy consumption (kWh), yielding a dual-modality network of $N=494$ nodes (247 traffic $\oplus$ 247 energy). Shared spatial coordinates allow GeoDCD to treat the concatenated system as a unified causal network without architectural modification.
+The ST-EVCDP dataset draws on real-time availability data from 18,061 public EV charging piles across Shenzhen, China, collected via a publicly accessible mobile application. The data span 30 days (19 June to 18 July 2022) at 5-minute intervals, yielding 8,640 timestamps. The city is modelled as a graph of 247 traffic analysis zones (TAZs) connected by 1,006 adjacency edges. Within each TAZ, we extract two modalities: charging pile occupancy (the fraction of busy stations) and charging energy volume (kWh). Pairing these modalities yields a dual-modality network of $N=494$ nodes ($247$ traffic $\oplus$ $247$ energy). Shared spatial coordinates enable GeoDCD to treat the concatenated system as a unified causal network without architectural modification.
 
 \paragraph{Baseline methods.}
 We compare against a comprehensive suite spanning linear and nonlinear approaches: \textit{GVAR} (Global Vector Autoregression), \textit{cMLP}, \textit{cLSTM}, \textit{TCDF}, and \textit{eSRU} as neural baselines; \textit{NAVAR} with both MLP and LSTM encoders; and modern causal discovery methods including \textit{CUTS+}, \textit{UnCLE}, and \textit{Causalformer}. All baselines are re-implemented under identical data preprocessing, architecture constraints (where applicable), and evaluation protocols to ensure fair comparison.
