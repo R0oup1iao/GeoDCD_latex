@@ -116,41 +116,13 @@ Real-world urban systems are characterized by tightly coupled infrastructure sub
 \textbf{Asymmetric Bidirectional Coupling.}
 As visualized in Fig.~\ref{fig:cross_modal_multi}a, GeoDCD successfully decouples Traffic $\to$ Energy and Energy $\to$ Traffic causal links overlaying the physical road network. The cumulative causal impact exhibits a striking spatial asymmetry (Fig.~\ref{fig:cross_modal_multi}c,d). Major energy-to-traffic causal hubs (where charging load fluctuations trigger local traffic anomalies) cluster in the high-density western urban core (Nanshan and Futian districts). Conversely, dominant traffic-to-energy drivers (where elevated road occupancy redirects downstream charging behaviors) populate the eastern transportation corridors (Luohu and Longgang). This spatial segregation reveals distinct functional zones that operate either as traffic-driven or energy-driven subsystems.
 
-\textbf{Diurnal Temporal Phase Transitions.}
-The interaction strength between transport and grid subsystems is highly non-stationary. GeoDCD tracks the diurnal evolution of cross-modal coupling across consecutive inference windows (Fig.~\ref{fig:cross_modal_multi}b). The dominant causal direction reverses periodically, showing crossover points aligned with morning and evening peak hours. Traffic-to-energy coupling intensifies during commuter rushes, whereas energy-to-traffic spillover dominates during midday and late evening charging surges. This temporal fluctuation confirms that urban inter-modal dependencies are characterized by rapid regime transitions, which are lost under static network formulations.
+\textbf{Stable Coupling Allocation with Directional Asymmetry.}
+GeoDCD tracks the evolution of cross-modal coupling across 300 consecutive inference windows (Fig.~\ref{fig:cross_modal_multi}b). The causal budget decomposition reveals a remarkably stable allocation: intra-modal coupling consistently absorbs ${\sim}56\%$ of total causal attention, while the remaining ${\sim}44\%$ splits asymmetrically between energy-to-traffic (${\sim}24\%$) and traffic-to-energy (${\sim}20\%$) directions. This temporal stability (coefficient of variation ${<}1\%$) indicates that the structural coupling between urban energy and mobility subsystems is an intrinsic property of the infrastructure topology rather than a transient regime, yet the persistent directional asymmetry---energy fluctuations exert slightly stronger downstream effects on traffic than vice versa---captures a genuine functional hierarchy that static correlation analyses cannot disentangle.
 
 \begin{figure}[htbp]
     \centering
-    \begin{subfigure}[b]{0.55\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/evcdp_cross_modal_map.pdf}
-        \caption{Shenzhen cross-modal network layout}
-        \label{fig:evcdp_map}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.42\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/evcdp_temporal_coupling.pdf}
-        \caption{Diurnal coupling dynamics}
-        \label{fig:evcdp_temporal}
-    \end{subfigure}
-    
-    \vspace{0.3cm}
-    
-    \begin{subfigure}[b]{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/evcdp_energy_driving.pdf}
-        \caption{Energy-to-traffic causal impact}
-        \label{fig:evcdp_energy_driving}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/evcdp_traffic_driving.pdf}
-        \caption{Traffic-to-energy causal impact}
-        \label{fig:evcdp_traffic_driving}
-    \end{subfigure}
-    \caption{\textbf{Cross-modal causal feedbacks and spatial asymmetries in Shenzhen's coupled energy-mobility infrastructure ($N=494$).} \textbf{a,} Spatial layout of top-tier bidirectional causal links overlaying traffic analysis zones. \textbf{b,} Temporal diurnal evolution of inter-modal coupling strength showing peak-hour crossover dynamics. \textbf{c,} Spatial distribution of cumulative charging demand influence on traffic networks. \textbf{d,} Spatial distribution of cumulative road occupancy influence on charging demand networks.}
+    \includegraphics[width=\textwidth]{figures/evcdp_cross_modal.pdf}
+    \caption{\textbf{Cross-modal causal feedbacks and spatial asymmetries in Shenzhen's coupled energy-mobility infrastructure ($N=494$).} \textbf{a,} Spatial layout of top-tier bidirectional causal links overlaying traffic analysis zones. \textbf{b,} Causal coupling budget allocation over 300 inference windows; stacked bands show the partition of total causal attention among intra-modal (gray), energy$\to$traffic (orange), and traffic$\to$energy (teal) directions, with percentage labels indicating the mean allocation. \textbf{c,} Spatial distribution of cumulative charging demand influence on traffic networks. \textbf{d,} Spatial distribution of cumulative road occupancy influence on charging demand networks.}
     \label{fig:cross_modal_multi}
 \end{figure}
 

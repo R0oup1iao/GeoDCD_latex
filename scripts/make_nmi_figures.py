@@ -82,14 +82,15 @@ def save_all(fig: plt.Figure, stem: str, dpi: int = 450) -> None:
     plt.close(fig)
 
 
-def panel_label(ax, label: str, x: float = -0.09, y: float = 1.05) -> None:
+def panel_label(ax, label: str, x: float = -0.09, y: float = 1.05,
+                ha: str = "left", va: str = "bottom") -> None:
     ax.text(
         x,
         y,
         label,
         transform=ax.transAxes,
-        ha="left",
-        va="bottom",
+        ha=ha,
+        va=va,
         fontsize=8,
         fontweight="bold",
     )
@@ -383,15 +384,66 @@ def beijing_cases() -> None:
     save_all(fig, "beijing_causal_map")
 
 
-def evcdp_map() -> None:
-    data = load_result("EVCDP")
-    xy_all = lonlat(data["coords"])
-    graph = data["graph"]
-    n = graph.shape[0]
-    half = n // 2
-    t_idx = np.arange(half)
-    e_idx = np.arange(half, n)
-    xy = xy_all[:half]
+def load_evcdp_dynamic() -> dict | None:
+    p = PY_RESULT["EVCDP"] / "est_dynamic_sparse.npz"
+    if p.exists():
+        return np.load(p)
+    return None
+
+
+def cross_modal_budget_over_time(dyn, e_idx: np.ndarray, t_idx: np.ndarray):
+    """Return (windows, e2t, t2e, intra): total causal budget per direction per window.
+
+    Sums (not averages) the causal strength values so the band widths in a stacked
+    area chart reflect the true allocation of causal attention across modalities.
+    """
+    if dyn is None:
+        return None, None, None, None
+    indices = dyn["indices"]  # (T, N, k)
+    values = dyn["values"]    # (T, N, k, V)
+    T = indices.shape[0]
+    N = indices.shape[1]
+    is_t = np.zeros(N, dtype=bool)
+    is_t[t_idx] = True
+    is_e = np.zeros(N, dtype=bool)
+    is_e[e_idx] = True
+    e2t, t2e, intra = [], [], []
+    for t in range(T):
+        idx = indices[t]            # (N, k)
+        val = values[t, :, :, 0]    # (N, k)
+        # Energy sources -> Traffic targets (sum of causal weights)
+        et_mask = is_t[idx[e_idx]]
+        et = val[e_idx][et_mask].sum() if et_mask.any() else 0.0
+        # Traffic sources -> Energy targets
+        te_mask = is_e[idx[t_idx]]
+        te = val[t_idx][te_mask].sum() if te_mask.any() else 0.0
+        # Intra-modal references
+        ee_mask = is_e[idx[e_idx]]
+        ee = val[e_idx][ee_mask].sum() if ee_mask.any() else 0.0
+        tt_mask = is_t[idx[t_idx]]
+        tt = val[t_idx][tt_mask].sum() if tt_mask.any() else 0.0
+        e2t.append(float(et))
+        t2e.append(float(te))
+        intra.append(float(ee + tt))
+    return np.arange(T), np.array(e2t), np.array(t2e), np.array(intra)
+
+
+def _panel_colorbar(ax, sm, label: str):
+    """Attach a compact inset colorbar that does NOT shrink the parent axes."""
+    try:
+        fig = ax.get_figure()
+        bbox = ax.get_position()
+        cax = fig.add_axes([bbox.x1 + 0.008, bbox.y0 + bbox.height * 0.22,
+                            0.014, bbox.height * 0.56])
+        cbar = fig.colorbar(sm, cax=cax)
+        cbar.set_label(label, fontsize=6)
+        cbar.ax.tick_params(labelsize=5, length=1.5)
+        return cbar
+    except Exception:
+        return None
+
+
+def _draw_evcdp_map(ax, xy, graph, t_idx, e_idx, proj) -> None:
     e2t = graph[t_idx[:, None], e_idx]
     t2e = graph[e_idx[:, None], t_idx]
     e_rows, e_cols = np.where(e2t >= np.percentile(e2t[e2t > 0], 94))
@@ -406,57 +458,137 @@ def evcdp_map() -> None:
         t_rows, t_cols, t_weights = t_rows[keep], t_cols[keep], t_weights[keep]
     all_w = np.concatenate([e_weights, t_weights])
     norm = Normalize(vmin=float(all_w.min()), vmax=float(all_w.max()))
-    proj = ccrs.PlateCarree() if ccrs is not None else None
-    fig = plt.figure(figsize=(7.2, 5.4), constrained_layout=True)
-    ax = fig.add_subplot(1, 1, 1, projection=proj) if proj is not None else fig.add_subplot(1, 1, 1)
     add_map_background(ax, xy, pad=0.08)
-    score = graph[t_idx[:, None], e_idx].sum(axis=0) + graph[e_idx[:, None], t_idx].sum(axis=0)
-    score = score / (score.max() + 1e-12)
-    ax.scatter(xy[:, 0], xy[:, 1], s=8 + 35 * score, color="#2F3A45", alpha=0.62, edgecolors="white", linewidths=0.25, transform=proj, zorder=5)
 
-    def add_links(rows, cols, weights, color, reverse=False):
+    def add_links(rows, cols, weights, color):
         order = np.argsort(weights)
         for r, c, w in zip(rows[order], cols[order], weights[order]):
-            src, dst = (c, r) if not reverse else (c, r)
-            x1, y1 = xy[src]
-            x2, y2 = xy[dst]
-            alpha = 0.18 + 0.56 * norm(w)
-            lw = 0.22 + 1.35 * norm(w)
-            ax.add_patch(
-                FancyArrowPatch(
-                    (x1, y1),
-                    (x2, y2),
-                    arrowstyle="-|>",
-                    mutation_scale=4.0,
-                    linewidth=lw,
-                    color=color,
-                    alpha=alpha,
-                    transform=proj,
-                    zorder=4,
-                )
-            )
+            x1, y1 = xy[c]
+            x2, y2 = xy[r]
+            alpha = 0.30 + 0.55 * norm(w)
+            lw = 0.45 + 1.80 * norm(w)
+            ax.add_patch(FancyArrowPatch((x1, y1), (x2, y2), arrowstyle="-",
+                                         linewidth=lw, color=color,
+                                         alpha=alpha, transform=proj, zorder=4))
 
     add_links(e_rows, e_cols, e_weights, PALETTE["energy"])
     add_links(t_rows, t_cols, t_weights, PALETTE["traffic"])
-    ax.set_title("Shenzhen cross-modal causal links", fontsize=8, pad=3)
+    ax.set_title("Cross-modal causal links", fontsize=8, pad=3)
     legend = [
-        Line2D([0], [0], color=PALETTE["energy"], lw=1.6, label="Energy to traffic"),
-        Line2D([0], [0], color=PALETTE["traffic"], lw=1.6, label="Traffic to energy"),
-        Line2D([0], [0], marker="o", color="none", markerfacecolor="#2F3A45", markeredgecolor="white", markersize=4.8, label="TAZ gateway score"),
+        Line2D([0], [0], color=PALETTE["energy"], lw=1.6, label="Energy → Traffic"),
+        Line2D([0], [0], color=PALETTE["traffic"], lw=1.6, label="Traffic → Energy"),
     ]
-    leg1 = ax.legend(handles=legend, loc="lower left", fontsize=6.5)
-    width_legend = [
-        Line2D([0], [0], color="#555555", lw=0.5, label="weak"),
-        Line2D([0], [0], color="#555555", lw=1.6, label="strong"),
+    ax.legend(handles=legend, loc="lower left", fontsize=5.5, framealpha=0.9)
+
+
+def _draw_temporal(ax, e_idx, t_idx) -> None:
+    """Stacked area chart: causal budget allocation (intra / E→T / T→E) over time.
+
+    The data is remarkably stable (temporal CV < 2%), so the flat bands themselves
+    communicate the finding: urban cross-modal coupling structure is temporally
+    invariant, with a consistent directional asymmetry.
+    """
+    dyn = load_evcdp_dynamic()
+    windows, e2t, t2e, intra = cross_modal_budget_over_time(dyn, e_idx, t_idx)
+    ax.set_title("Causal coupling budget\nallocation over time", fontsize=8, pad=3)
+    if windows is None:
+        ax.text(0.5, 0.5, "No dynamic data available", ha="center", va="center",
+                transform=ax.transAxes, fontsize=7)
+        return
+    c_et = PALETTE["energy"]    # orange
+    c_te = PALETTE["traffic"]   # teal
+    c_intra = "#C8C8C8"         # neutral gray
+    # ── stacked bands ──
+    ax.fill_between(windows, 0, intra, color=c_intra, alpha=0.70,
+                    edgecolor="none", zorder=1)
+    ax.fill_between(windows, intra, intra + e2t, color=c_et, alpha=0.78,
+                    edgecolor="none", zorder=2)
+    ax.fill_between(windows, intra + e2t, intra + e2t + t2e, color=c_te, alpha=0.78,
+                    edgecolor="none", zorder=2)
+    # thin boundary lines for definition
+    ax.plot(windows, intra, color="white", linewidth=0.5, zorder=3)
+    ax.plot(windows, intra + e2t, color="white", linewidth=0.5, zorder=3)
+    ax.plot(windows, intra + e2t + t2e, color="white", linewidth=0.5, zorder=3)
+    # ── percentage annotations on the right margin ──
+    total = intra + e2t + t2e
+    pct_intra = intra.mean() / total.mean() * 100
+    pct_et = e2t.mean() / total.mean() * 100
+    pct_te = t2e.mean() / total.mean() * 100
+    y_mid = [intra.mean() / 2,
+             intra.mean() + e2t.mean() / 2,
+             intra.mean() + e2t.mean() + t2e.mean() / 2]
+    for ym, pct, col, lbl in [(y_mid[0], pct_intra, "#888888", "Intra-modal"),
+                               (y_mid[1], pct_et, c_et, "Energy → Traffic"),
+                               (y_mid[2], pct_te, c_te, "Traffic → Energy")]:
+        ax.text(windows[-1] + 3, ym, f"{pct:.0f}%", fontsize=6, color=col,
+                va="center", ha="left", fontweight="bold")
+    # ── stability annotation ──
+    cv = float(np.std(total) / np.mean(total) * 100)
+    ax.text(0.97, 0.06, f"temporal CV = {cv:.1f}%", transform=ax.transAxes,
+            fontsize=5.5, color="#888888", ha="right", va="bottom", style="italic")
+    ax.set_xlabel("Inference window", fontsize=7)
+    ax.set_ylabel("Total causal strength", fontsize=7)
+    ax.tick_params(labelsize=6)
+    ax.set_xlim(windows[0], windows[-1] + 10)
+    ax.grid(axis="y", color="#ECECEC", linewidth=0.4, zorder=0)
+    legend_items = [
+        (c_intra, "Intra-modal"),
+        (c_et, "Energy → Traffic"),
+        (c_te, "Traffic → Energy"),
     ]
-    leg2 = ax.legend(handles=width_legend, loc="lower right", title="link strength", fontsize=6, title_fontsize=6.5)
-    ax.add_artist(leg1)
-    ax.add_artist(leg2)
-    sm = mpl.cm.ScalarMappable(cmap=LinearSegmentedColormap.from_list("link_strength", ["#D9D9D9", "#555555"]), norm=norm)
-    sm.set_array([])
-    cbar = fig.colorbar(sm, ax=ax, location="right", shrink=0.62, pad=0.015)
-    cbar.set_label("causal strength", fontsize=7)
-    save_all(fig, "evcdp_cross_modal_map")
+    handles = [Line2D([0], [0], color=c, lw=6, label=l) for c, l in legend_items]
+    ax.legend(handles=handles, fontsize=5.5, loc="upper left", frameon=False,
+              handlelength=1.2, borderpad=0.3)
+
+
+def _draw_impact(ax, xy, vals, cmap_name, title, vmin, vmax, proj) -> None:
+    add_map_background(ax, xy, pad=0.06)
+    sc = ax.scatter(xy[:, 0], xy[:, 1], c=vals, cmap=cmap_name, s=22,
+                    edgecolors="white", linewidths=0.2, vmin=vmin, vmax=vmax,
+                    alpha=0.9, transform=proj, zorder=4)
+    ax.set_title(title, fontsize=7.5, pad=3)
+    cbar = _panel_colorbar(ax, sc, "cumulative\ncausal impact")
+    if cbar is not None:
+        cbar.ax.tick_params(labelsize=5)
+
+
+def evcdp_combined() -> None:
+    """Single, self-contained EVCDP figure (panels a–d) replacing the old 4-PDF layout."""
+    data = load_result("EVCDP")
+    xy_all = lonlat(data["coords"])
+    graph = data["graph"]
+    n = graph.shape[0]
+    half = n // 2
+    t_idx = np.arange(half)
+    e_idx = np.arange(half, n)
+    xy = xy_all[:half]
+    proj = ccrs.PlateCarree() if ccrs is not None else None
+
+    fig = plt.figure(figsize=(10.8, 8.1))
+    gs = fig.add_gridspec(2, 2, wspace=0.22, hspace=0.06,
+                          left=0.05, right=0.965, top=0.96, bottom=0.05)
+    ax_a = fig.add_subplot(gs[0, 0], projection=proj) if proj is not None else fig.add_subplot(gs[0, 0])
+    _draw_evcdp_map(ax_a, xy, graph, t_idx, e_idx, proj)
+    panel_label(ax_a, "a", x=0.5, y=-0.18, ha="center", va="top")
+    ax_b = fig.add_subplot(gs[0, 1])
+    _draw_temporal(ax_b, e_idx, t_idx)
+    ax_b.set_box_aspect(1 / 2.388)  # match the w/h ratio that map panels a/c/d naturally adopt
+    panel_label(ax_b, "b", x=0.5, y=-0.18, ha="center", va="top")
+
+    et_vals = graph[e_idx[:, None], t_idx].sum(axis=0)  # per-traffic-TAZ E→T
+    te_vals = graph[t_idx[:, None], e_idx].sum(axis=0)  # per-energy-TAZ T→E
+    vmin = float(min(et_vals.min(), te_vals.min()))
+    vmax = float(max(et_vals.max(), te_vals.max()))
+
+    ax_c = fig.add_subplot(gs[1, 0], projection=proj) if proj is not None else fig.add_subplot(gs[1, 0])
+    _draw_impact(ax_c, xy, et_vals, "Oranges", "Energy → Traffic\ncumulative impact", vmin, vmax, proj)
+    panel_label(ax_c, "c", x=0.5, y=-0.18, ha="center", va="top")
+
+    ax_d = fig.add_subplot(gs[1, 1], projection=proj) if proj is not None else fig.add_subplot(gs[1, 1])
+    _draw_impact(ax_d, xy, te_vals, "Greens", "Traffic → Energy\ncumulative impact", vmin, vmax, proj)
+    panel_label(ax_d, "d", x=0.5, y=-0.18, ha="center", va="top")
+
+    save_all(fig, "evcdp_cross_modal")
 
 
 def main() -> None:
@@ -465,7 +597,7 @@ def main() -> None:
     cluster_maps()
     dynamic_intensity()
     beijing_cases()
-    evcdp_map()
+    evcdp_combined()
 
 
 if __name__ == "__main__":
