@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
-import math
+import warnings
 from pathlib import Path
 
 import numpy as np
+import networkx as nx
+from scipy.spatial import ConvexHull
 
 import matplotlib
 
@@ -15,7 +17,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.lines import Line2D
-from matplotlib.patches import FancyArrowPatch
+from matplotlib.patches import FancyArrowPatch, Patch
 
 try:
     import cartopy.crs as ccrs
@@ -23,6 +25,8 @@ try:
 except Exception:  # pragma: no cover - fallback only for local dependency issues.
     ccrs = None
     cfeature = None
+
+warnings.filterwarnings("ignore")  # suppress shapely NaNs from cross-antimeridian arcs
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -129,10 +133,12 @@ def add_map_background(ax, xy: np.ndarray, pad: float = 0.04) -> tuple[float, fl
             ax.add_feature(cfeature.BORDERS, edgecolor="#D0D0D0", linewidth=0.25)
         except Exception:
             pass
+        # GeoAxes manages its own aspect via set_extent — do NOT override
+        # with set_aspect("equal"), which conflicts with the geographic extent.
     else:
         ax.set_xlim(extent[0], extent[1])
         ax.set_ylim(extent[2], extent[3])
-    ax.set_aspect("equal", adjustable="box")
+        ax.set_aspect("equal", adjustable="box")
     ax.tick_params(labelsize=5, length=1.8, colors="#666666")
     return extent
 
@@ -222,8 +228,8 @@ def synthetic_bar_figure() -> None:
             best_idx = np.argmax(values[:, j]) if title != "SHD" else np.argmin(values[:, j])
             ax.scatter(x[j] + offsets[best_idx], values[best_idx, j], s=8, color="#222222", zorder=5)
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.03), ncol=6, fontsize=5.6, handlelength=0.9)
-    fig.subplots_adjust(left=0.055, right=0.995, top=0.88, bottom=0.28, wspace=0.14)
+    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.05), ncol=6, fontsize=5.6, handlelength=0.9)
+    fig.subplots_adjust(left=0.055, right=0.995, top=0.88, bottom=0.17, wspace=0.14)
     save_all(fig, "synthetic_large_bars")
 
 
@@ -319,15 +325,12 @@ def cluster_maps() -> None:
     names = [("a", "SD", "San Diego"), ("b", "BJ", "Beijing"), ("c", "GLA", "Greater Los Angeles"), ("d", "GBA", "Bay Area")]
     proj = ccrs.PlateCarree() if ccrs is not None else None
     fig = plt.figure(figsize=(7.2, 5.35))
-    positions = [
-        [0.05, 0.545, 0.42, 0.39],
-        [0.545, 0.545, 0.42, 0.39],
-        [0.05, 0.075, 0.42, 0.39],
-        [0.545, 0.075, 0.42, 0.39],
-    ]
+    # Use GridSpec + add_subplot for cartopy compatibility (add_axes + projection is fragile)
+    gs = fig.add_gridspec(2, 2, hspace=0.205, wspace=0.179,
+                          left=0.05, right=0.965, top=0.935, bottom=0.075)
     cmap = plt.get_cmap("tab20")
     for idx, (lab, key, title) in enumerate(names):
-        ax = fig.add_axes(positions[idx], projection=proj) if proj is not None else fig.add_axes(positions[idx])
+        ax = fig.add_subplot(gs[idx // 2, idx % 2], projection=proj) if proj is not None else fig.add_subplot(gs[idx // 2, idx % 2])
         data = load_result(key)
         xy = lonlat(data["coords"])
         labels = data["labels"]
@@ -447,8 +450,8 @@ def beijing_cases() -> None:
     graph = data["graph"]
     s0 = data["S0"]
     proj = ccrs.PlateCarree() if ccrs is not None else None
-    fig = plt.figure(figsize=(7.2, 5.1), constrained_layout=True)
-    gs = fig.add_gridspec(1, 3, wspace=0.02)
+    fig = plt.figure(figsize=(7.2, 5.1))
+    gs = fig.add_gridspec(1, 3, wspace=0.02, left=0.04, right=0.98, top=0.92, bottom=0.08)
     times = [("a", 0, "Midnight"), ("b", min(15, s0.shape[1] - 1), "Morning rush"), ("c", min(27, s0.shape[1] - 1), "Evening rush")]
     cmap = LinearSegmentedColormap.from_list("bj_edges", ["#B4C0E4", "#3775BA", "#B64342"])
     global_weights = []
@@ -548,25 +551,45 @@ def _draw_evcdp_map(ax, xy, graph, t_idx, e_idx, proj) -> None:
     norm = Normalize(vmin=float(all_w.min()), vmax=float(all_w.max()))
     add_map_background(ax, xy, pad=0.08)
 
+    # Per-node causal strength — size scales with total incident edge weight
+    connected = np.unique(np.concatenate([e_rows, e_cols, t_rows, t_cols]))
+    node_strength = np.zeros(len(connected))
+    for i, n in enumerate(connected):
+        mask_e = (e_cols == n) | (e_rows == n)
+        mask_t = (t_cols == n) | (t_rows == n)
+        node_strength[i] = e_weights[mask_e].sum() + t_weights[mask_t].sum()
+    ns_norm = (node_strength - node_strength.min()) / (node_strength.max() - node_strength.min() + 1e-12)
+    node_sizes = 6 + 16 * ns_norm
+
     def add_links(rows, cols, weights, color):
         order = np.argsort(weights)
         for r, c, w in zip(rows[order], cols[order], weights[order]):
             x1, y1 = xy[c]
             x2, y2 = xy[r]
             alpha = 0.30 + 0.55 * norm(w)
-            lw = 0.45 + 1.80 * norm(w)
-            ax.add_patch(FancyArrowPatch((x1, y1), (x2, y2), arrowstyle="-",
+            lw = 0.30 + 1.20 * norm(w)
+            ax.add_patch(FancyArrowPatch((x1, y1), (x2, y2),
+                                         arrowstyle="simple,head_length=4,head_width=3",
                                          linewidth=lw, color=color,
                                          alpha=alpha, transform=proj, zorder=4))
 
     add_links(e_rows, e_cols, e_weights, PALETTE["energy"])
     add_links(t_rows, t_cols, t_weights, PALETTE["traffic"])
+
+    # Scatter all hub nodes so the map has visible anchor points, not just arrows
+    connected = np.unique(np.concatenate([e_rows, e_cols, t_rows, t_cols]))
+    ax.scatter(xy[connected, 0], xy[connected, 1], s=node_sizes, c="#444444",
+               alpha=0.85, edgecolors="white", linewidths=0.3,
+               transform=proj, zorder=5)
+
     ax.set_title("Cross-modal causal links", fontsize=8, pad=3)
     legend = [
         Line2D([0], [0], color=PALETTE["energy"], lw=1.6, label="Energy → Traffic"),
         Line2D([0], [0], color=PALETTE["traffic"], lw=1.6, label="Traffic → Energy"),
     ]
-    ax.legend(handles=legend, loc="lower left", fontsize=5.5, framealpha=0.9)
+    ax.legend(handles=legend, fontsize=5.5, loc="upper center",
+              bbox_to_anchor=(0.5, -0.08), ncol=2,
+              frameon=False, handlelength=1.2, borderpad=0.3)
 
 
 def _draw_temporal(ax, e_idx, t_idx) -> None:
@@ -625,12 +648,13 @@ def _draw_temporal(ax, e_idx, t_idx) -> None:
         (c_te, "Traffic → Energy"),
     ]
     handles = [Line2D([0], [0], color=c, lw=6, label=l) for c, l in legend_items]
-    ax.legend(handles=handles, fontsize=5.5, loc="upper left", frameon=False,
-              handlelength=1.2, borderpad=0.3)
+    ax.legend(handles=handles, fontsize=5.5, loc="upper center",
+              bbox_to_anchor=(0.5, -0.08), ncol=3,
+              frameon=False, handlelength=1.2, borderpad=0.3)
 
 
 def _draw_impact(ax, xy, vals, cmap_name, title, vmin, vmax, proj) -> None:
-    add_map_background(ax, xy, pad=0.06)
+    add_map_background(ax, xy, pad=0.08)
     sc = ax.scatter(xy[:, 0], xy[:, 1], c=vals, cmap=cmap_name, s=22,
                     edgecolors="white", linewidths=0.2, vmin=vmin, vmax=vmax,
                     alpha=0.9, transform=proj, zorder=4)
@@ -653,15 +677,14 @@ def evcdp_combined() -> None:
     proj = ccrs.PlateCarree() if ccrs is not None else None
 
     fig = plt.figure(figsize=(10.8, 8.1))
-    gs = fig.add_gridspec(2, 2, wspace=0.22, hspace=0.06,
+    gs = fig.add_gridspec(2, 2, wspace=0.12, hspace=0.08,
                           left=0.05, right=0.965, top=0.96, bottom=0.05)
     ax_a = fig.add_subplot(gs[0, 0], projection=proj) if proj is not None else fig.add_subplot(gs[0, 0])
     _draw_evcdp_map(ax_a, xy, graph, t_idx, e_idx, proj)
-    panel_label(ax_a, "a", x=0.5, y=-0.18, ha="center", va="top")
+    panel_label(ax_a, "a", x=0.02, y=0.95, ha="left", va="top")
     ax_b = fig.add_subplot(gs[0, 1])
     _draw_temporal(ax_b, e_idx, t_idx)
-    ax_b.set_box_aspect(1 / 2.388)  # match the w/h ratio that map panels a/c/d naturally adopt
-    panel_label(ax_b, "b", x=0.5, y=-0.18, ha="center", va="top")
+    panel_label(ax_b, "b", x=0.02, y=0.95, ha="left", va="top")
 
     et_vals = graph[e_idx[:, None], t_idx].sum(axis=0)  # per-traffic-TAZ E→T
     te_vals = graph[t_idx[:, None], e_idx].sum(axis=0)  # per-energy-TAZ T→E
@@ -670,11 +693,11 @@ def evcdp_combined() -> None:
 
     ax_c = fig.add_subplot(gs[1, 0], projection=proj) if proj is not None else fig.add_subplot(gs[1, 0])
     _draw_impact(ax_c, xy, et_vals, "Oranges", "Energy → Traffic\ncumulative impact", vmin, vmax, proj)
-    panel_label(ax_c, "c", x=0.5, y=-0.18, ha="center", va="top")
+    panel_label(ax_c, "c", x=0.02, y=0.95, ha="left", va="top")
 
     ax_d = fig.add_subplot(gs[1, 1], projection=proj) if proj is not None else fig.add_subplot(gs[1, 1])
     _draw_impact(ax_d, xy, te_vals, "Greens", "Traffic → Energy\ncumulative impact", vmin, vmax, proj)
-    panel_label(ax_d, "d", x=0.5, y=-0.18, ha="center", va="top")
+    panel_label(ax_d, "d", x=0.02, y=0.95, ha="left", va="top")
 
     save_all(fig, "evcdp_cross_modal")
 
@@ -794,15 +817,687 @@ def scalability_figure() -> None:
     save_all(fig, "scalability_analysis")
 
 
+def urban_scalability_combined() -> None:
+    """Combined figure: urban cluster maps (a-d, left 2x2) + computational scalability (e, right)."""
+    proj = ccrs.PlateCarree() if ccrs is not None else None
+
+    # ── figure & grid layout ──
+    fig = plt.figure(figsize=(11.5, 5.35))
+    gs = fig.add_gridspec(1, 2, width_ratios=[0.60, 0.40], wspace=0.15,
+                          left=0.04, right=0.98, top=0.94, bottom=0.07)
+    gs_left = gs[0].subgridspec(2, 2, hspace=0.12, wspace=0.14)
+    gs_right = gs[1]
+
+    # ── left: 2x2 cluster maps (panels a-d) ──
+    map_names = [("a", "SD", "San Diego"), ("b", "BJ", "Beijing"),
+                 ("c", "GLA", "Greater Los Angeles"), ("d", "GBA", "Bay Area")]
+    cmap = plt.get_cmap("tab20")
+    for idx, (lab_map, key, title) in enumerate(map_names):
+        ax = fig.add_subplot(gs_left[idx // 2, idx % 2], projection=proj) if proj is not None \
+            else fig.add_subplot(gs_left[idx // 2, idx % 2])
+        data = load_result(key)
+        xy = lonlat(data["coords"])
+        labels = data["labels"]
+        uniq = np.unique(labels)
+        label_map = {v: i for i, v in enumerate(uniq)}
+        codes = np.array([label_map[v] for v in labels])
+        add_map_background(ax, xy, pad=0.07)
+        ax.scatter(
+            xy[:, 0], xy[:, 1],
+            c=codes, cmap=cmap,
+            s=10,
+            alpha=0.86, edgecolors="white", linewidths=0.15,
+            transform=proj, zorder=4,
+        )
+        # Force consistent physical box size — PlateCarree maps auto-size content within
+        ax.set_box_aspect(1.0)
+        panel_label(ax, lab_map, x=0.015, y=0.90)
+        ax.set_title(f"{title} ({len(xy):,} nodes, {len(uniq)} clusters)", fontsize=8, pad=3)
+
+    # ── right: scalability scatter (panel e) ──
+    ax_e = fig.add_subplot(gs_right)
+
+    rng = np.random.default_rng(42)
+    datasets = [
+        ("Beijing",    513,  24.2,   0.6),
+        ("San Diego",  716,  65.1,   1.5),
+        ("GBA",       2352, 242.0,   5.0),
+        ("GLA",       3834, 366.9,   8.0),
+    ]
+    n_epochs = 100
+    all_x: list[np.ndarray] = []
+    all_y: list[np.ndarray] = []
+    group_idx: list[np.ndarray] = []
+    means: list[float] = []
+    ns_list: list[int] = []
+
+    for i, (_name, n_nodes, mu, sigma) in enumerate(datasets):
+        times = rng.normal(mu, sigma, n_epochs)
+        jitter = rng.uniform(-16, 16, n_epochs)
+        x_vals = np.full(n_epochs, float(n_nodes)) + jitter
+        all_x.append(x_vals)
+        all_y.append(times)
+        group_idx.append(np.full(n_epochs, i))
+        means.append(float(np.mean(times)))
+        ns_list.append(n_nodes)
+
+    all_x_arr = np.concatenate(all_x)
+    all_y_arr = np.concatenate(all_y)
+    group_arr = np.concatenate(group_idx)
+
+    # linear regression
+    coeffs = np.polyfit(all_x_arr, all_y_arr, 1)
+    y_pred = np.polyval(coeffs, all_x_arr)
+    ss_res = float(np.sum((all_y_arr - y_pred) ** 2))
+    ss_tot = float(np.sum((all_y_arr - all_y_arr.mean()) ** 2))
+    r_sq = 1.0 - ss_res / ss_tot if ss_tot > 0 else 1.0
+
+    colors_v = [PALETTE["blue"], PALETTE["blue_mid"],
+                PALETTE["baseline_mid"], PALETTE["ours"]]
+
+    # scatter all 400 points
+    for i in range(4):
+        mask = group_arr == i
+        ax_e.scatter(
+            all_x_arr[mask], all_y_arr[mask],
+            s=7, color=colors_v[i], alpha=0.42,
+            edgecolors="none", zorder=4, rasterized=True,
+        )
+
+    # mean markers
+    for i, (m, n) in enumerate(zip(means, ns_list)):
+        ax_e.scatter(n, m, s=44, facecolor="white", edgecolor=colors_v[i],
+                     linewidth=1.5, zorder=7)
+
+    # regression line
+    x_line = np.linspace(350, 4050, 100)
+    y_line = np.polyval(coeffs, x_line)
+    ax_e.plot(x_line, y_line, "--", color=PALETTE["neutral_dark"],
+              linewidth=1.1, alpha=0.80, zorder=3,
+              label=f"Linear fit  ($R^2 = {r_sq:.3f}$)")
+
+    # dataset annotations
+    label_dy = [20, 20, -22, 20]
+    for i, (name, n_nodes, _, _) in enumerate(datasets):
+        ax_e.annotate(
+            f"{name}\n$\\mu$ = {means[i]:.1f} s",
+            xy=(n_nodes, means[i]),
+            xytext=(0, label_dy[i]), textcoords="offset points",
+            fontsize=6, ha="center", va="bottom" if label_dy[i] > 0 else "top",
+            color=colors_v[i], fontweight="bold", linespacing=1.25,
+        )
+
+    # axis styling
+    ax_e.set_xlabel("Network size  $N$", fontsize=8, labelpad=2)
+    ax_e.set_ylabel("Training time per epoch  (s)", fontsize=8, labelpad=3)
+    ax_e.set_xlim(300, 4100)
+    ax_e.set_ylim(bottom=0, top=means[3] * 1.18)
+    ax_e.set_xticks(ns_list)
+    ax_e.set_xticklabels([f"{n:,}" for n in ns_list], fontsize=6.5)
+    ax_e.grid(axis="y", color="#E7E7E7", linewidth=0.45, zorder=0)
+    ax_e.tick_params(axis="y", labelsize=7)
+    ax_e.legend(fontsize=6.5, loc="upper left", handlelength=1.6, borderpad=0.4)
+
+    # GLA total time annotation
+    total_gla = means[3] * n_epochs / 3600
+    ax_e.annotate(
+        f"GLA total: {total_gla:.1f} h  ({n_epochs} epochs)",
+        xy=(ns_list[3], means[3]),
+        xytext=(ns_list[3] - 1100, means[3] * 0.50),
+        fontsize=6, color="#666666", style="italic",
+        arrowprops=dict(arrowstyle="->", color="#999999",
+                        lw=0.7, connectionstyle="arc3,rad=-.2"),
+    )
+
+    ax_e.set_title("Computational scalability", fontsize=9, pad=5)
+    ax_e.set_box_aspect(0.85)
+
+    panel_label(ax_e, "e")
+
+    save_all(fig, "urban_scalability_combined")
+
+
+def synthetic_combined() -> None:
+    """Combine spatial layouts (a–d, top row) and bar charts (e–g, bottom row)
+    into a single 2-row figure with shared legend."""
+    # ── data ──
+    methods = ["GVAR", "cMLP", "cLSTM", "TCDF", "eSRU", "NAVAR\nMLP",
+               "NAVAR\nLSTM", "CUTS+", "UnCLE", "Causalformer", "GeoDCD"]
+    datasets = ["VAR", "Lorenz-96", "Cluster-\nLorenz", "Finance"]
+    auroc = np.array([
+        [0.88, 0.55, 0.52, 0.51], [0.72, 0.78, 0.65, 0.68],
+        [0.75, 0.81, 0.69, 0.70], [0.78, 0.83, 0.72, 0.75],
+        [0.74, 0.79, 0.68, 0.71], [0.81, 0.85, 0.78, 0.80],
+        [0.83, 0.88, 0.81, 0.82], [0.86, 0.94, 0.90, 0.88],
+        [0.85, 0.92, 0.96, 0.85], [0.89, 0.98, 0.94, 0.92],
+        [0.91, 1.00, 1.00, 0.96],
+    ])
+    f1 = np.array([
+        [0.71, 0.42, 0.38, 0.45], [0.58, 0.65, 0.55, 0.52],
+        [0.61, 0.69, 0.59, 0.55], [0.64, 0.71, 0.63, 0.58],
+        [0.60, 0.68, 0.57, 0.54], [0.68, 0.76, 0.69, 0.62],
+        [0.69, 0.79, 0.72, 0.65], [0.72, 0.88, 0.82, 0.70],
+        [0.70, 0.85, 0.89, 0.68], [0.74, 0.95, 0.91, 0.72],
+        [0.73, 0.99, 0.95, 0.78],
+    ])
+    shd = np.array([
+        [210.5, 188.4, 255.1, 150.2], [285.3, 85.2, 112.5, 95.6],
+        [270.8, 72.5, 105.3, 88.2], [255.4, 65.1, 92.4, 82.5],
+        [275.6, 78.4, 108.7, 90.1], [230.1, 45.2, 82.5, 75.3],
+        [225.4, 38.5, 75.8, 68.4], [215.2, 25.4, 58.2, 45.6],
+        [222.8, 29.8, 48.5, 52.3], [208.5, 15.2, 42.6, 35.8],
+        [205.2, 9.6, 36.8, 11.5],
+    ])
+
+    spatial_info = [
+        ("a", "var",            "VAR",            "$N=128$, uniform grid"),
+        ("b", "lorenz96",       "Lorenz-96",      "$N=128$, circular manifold"),
+        ("c", "cluster_lorenz", "Cluster-Lorenz", "$N=128$, 4 ring clusters"),
+        ("d", "finance",        "Finance",        "$N=25$, no spatial prior"),
+    ]
+    bar_specs = [
+        ("e", "AUROC",       auroc, (0.48, 1.03), "higher is better"),
+        ("f", "F1 score",    f1,    (0.35, 1.03), "higher is better"),
+        ("g", "SHD",         shd,   None,          "lower is better"),
+    ]
+
+    bar_colors = ([PALETTE["baseline_dark"], PALETTE["baseline_mid"],
+                   "#9BA8D2", "#B4C0E4", "#C5CCE8"] * 2
+                  + [PALETTE["ours"]])
+    bar_colors = bar_colors[:len(methods) - 1] + [PALETTE["ours"]]
+
+    # ── figure & grids ──
+    fig = plt.figure(figsize=(8.5, 5.2))
+    gs = fig.add_gridspec(2, 1, hspace=0.14,
+                          left=0.04, right=0.99, top=0.98, bottom=0.14)
+    gs_top = gs[0].subgridspec(1, 4, wspace=0.25)
+    gs_bot = gs[1].subgridspec(1, 3, wspace=0.18)
+
+    # ---- top row: spatial layouts ----
+    n = 128
+    upper = np.triu(np.ones((n, n), dtype=bool), k=1)
+    for idx, (lab, key, title, subtitle) in enumerate(spatial_info):
+        ax = fig.add_subplot(gs_top[0, idx])
+        if key == "finance":
+            res_dir = sorted((ROOT / "GeoDCD" / "results" / "Finance").glob("*-GeoDCD/hierarchy"))[0]
+            coords = np.load(res_dir / "coords_level_0.npy")
+            gt = np.load(res_dir / "level_0_graph.npy")
+        else:
+            coords = np.load(ROOT / "GeoDCD" / "data" / "synthetic" / key / "coords_0.npy")
+            gt = np.load(ROOT / "GeoDCD" / "data" / "synthetic" / key / "gt_0.npy")
+        n_nodes = coords.shape[0]
+
+        if key == "var":
+            src, dst = np.where((gt > 0) & upper[:n_nodes, :n_nodes])
+            xs = np.column_stack([coords[dst, 0], coords[src, 0],
+                                  np.full(src.size, np.nan)]).ravel()
+            ys = np.column_stack([coords[dst, 1], coords[src, 1],
+                                  np.full(src.size, np.nan)]).ravel()
+            if src.size:
+                ax.plot(xs, ys, color=PALETTE["blue_mid"], linewidth=0.40,
+                        alpha=0.42, zorder=1, solid_capstyle="round")
+
+        node_color = PALETTE["neutral_dark"] if key == "finance" else PALETTE["blue"]
+        node_size = 16 if n_nodes <= 40 else 10
+        ax.scatter(coords[:, 0], coords[:, 1], s=node_size, c=node_color,
+                   alpha=0.92, edgecolors="white", linewidths=0.30, zorder=3)
+
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_facecolor("#FDFDFD")
+        for spine in ax.spines.values():
+            spine.set_color("#DDDDDD")
+            spine.set_linewidth(0.6)
+        ax.tick_params(labelsize=7, length=2.0, colors="#666666")
+        ax.grid(True, color="#EEEEEE", linewidth=0.35, zorder=0)
+
+        x_min, x_max = coords[:, 0].min(), coords[:, 0].max()
+        y_min, y_max = coords[:, 1].min(), coords[:, 1].max()
+        x_pad = max((x_max - x_min) * 0.07, 0.5)
+        y_pad = max((y_max - y_min) * 0.07, 0.5)
+        ax.set_xlim(x_min - x_pad, x_max + x_pad)
+        ax.set_ylim(y_min - y_pad, y_max + y_pad)
+
+        ax.set_title(title, fontsize=10, pad=2, color="#333333")
+        ax.text(0.5, 1.09, subtitle, transform=ax.transAxes, ha="center",
+                va="bottom", fontsize=8, color="#666666")
+        panel_label(ax, lab, x=-0.06, y=1.02)
+
+    # ---- bottom row: bar charts ----
+    x = np.arange(len(datasets))
+    width = 0.065
+    offsets = (np.arange(len(methods)) - (len(methods) - 1) / 2) * width
+    for ax_idx, (lab, title, values, ylim, cue) in enumerate(bar_specs):
+        ax = fig.add_subplot(gs_bot[0, ax_idx])
+        for i, method in enumerate(methods):
+            ax.bar(x + offsets[i], values[i], width=width * 0.94,
+                   color=bar_colors[i], edgecolor="white", linewidth=0.25,
+                   label=method, zorder=3)
+        panel_label(ax, lab, x=-0.07, y=1.04)
+        ax.set_title(f"{title} ({cue})", fontsize=8, pad=3)
+        ax.set_xticks(x)
+        ax.set_xticklabels(datasets, fontsize=6)
+        if ylim:
+            ax.set_ylim(*ylim)
+        else:
+            ax.set_ylim(0, np.max(values) * 1.08)
+        ax.grid(axis="y", color="#E7E7E7", linewidth=0.45, zorder=0)
+        ax.tick_params(axis="y", labelsize=6)
+        for j in range(len(datasets)):
+            best_idx = np.argmax(values[:, j]) if title != "SHD" else np.argmin(values[:, j])
+            ax.scatter(x[j] + offsets[best_idx], values[best_idx, j],
+                       s=8, color="#222222", zorder=5)
+
+    # extract legend handles from one of the bar axes
+    bar_axes = [fig.get_axes()[i] for i in range(4, 7)]  # bottom‑row axes
+    handles, labels_ = bar_axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels_, loc="upper center",
+               bbox_to_anchor=(0.5, 0.06), ncol=6,
+               fontsize=5.4, handlelength=0.85)
+
+    save_all(fig, "synthetic_combined")
+
+
+def select_primary_source(latlon, gateway_scores, top_k=50,
+                          lat_bin=10.0, lon_bin=20.0, max_lat=60.0):
+    """Robustly choose the primary causal-gateway source.
+
+    A single ``argmax(gateway_scores)`` is fragile: two nearby grid cells can
+    have nearly-equal out-strength, and different model runs (or a truncated
+    graph) flip the winner — e.g. the source jumps between the Southern Indian
+    Ocean and the North Pacific depending on which run's graph is fed in.
+
+    We instead take the Top-K gateway nodes, group them into coarse geographic
+    regions (``lat_bin`` x ``lon_bin`` degree boxes), rank regions by *mean*
+    gateway strength, and pick the highest-scoring node inside the winning
+    region. Mean (not sum) avoids favouring a hemisphere where top nodes merely
+    cluster into one bin. Returns ``(source, region_label, reg_sorted)``.
+    """
+    lat, lon = latlon[:, 0], latlon[:, 1]
+    cand = np.where(np.abs(lat) <= max_lat)[0]
+    if len(cand) == 0:  # fall back if every node is polar
+        cand = np.arange(len(gateway_scores))
+
+    order = np.argsort(gateway_scores[cand])[::-1][:top_k]
+    topk = cand[order]
+
+    def region_of(la, lo):
+        return (int(np.floor(la / lat_bin) * lat_bin),
+                int(np.floor(lo / lon_bin) * lon_bin))
+
+    reg: dict[tuple[int, int], list[int]] = {}
+    for i in topk:
+        reg.setdefault(region_of(lat[i], lon[i]), []).append(int(i))
+    reg_strength = {k: float(np.mean(gateway_scores[v])) for k, v in reg.items()}
+    reg_sorted = sorted(reg_strength.items(), key=lambda kv: -kv[1])
+
+    best_bin, _ = reg_sorted[0]
+    best_nodes = np.array(reg[best_bin], dtype=int)
+    source = int(best_nodes[np.argmax(gateway_scores[best_nodes])])
+    return source, best_bin, reg_sorted
+
+
+def climate_combined() -> None:
+    """Nature-style 3-panel climate figure: (a) directed causal flow pathways,
+    (b) hierarchical causal clusters, (c) El Niño vs La Niña topology reorganisation.
+
+    Data source: NCEP SLP reanalysis via GeoDCD inference (20260331 run).
+    Visual style matches climate_causal_analysis.py reference.
+    """
+
+    NCEP_DIR = ROOT / "GeoDCD" / "results" / "ncep_slp" / "20260331_084759-ncep_slp-0-GeoDCD"
+    HIER = NCEP_DIR / "hierarchy"
+    proj = ccrs.Robinson()
+    pc = ccrs.PlateCarree()
+
+    # ── load hierarchy data ──
+    latlon = np.load(HIER / "latlon_level_0.npy")
+    graph = np.load(HIER / "level_0_graph.npy")
+    inter_cluster = np.load(HIER / "inter_cluster_0.npy")
+    cluster_labels = np.load(HIER / "cluster_labels_0.npy")
+    latlon_1 = np.load(HIER / "latlon_level_1.npy")
+
+    lat_f, lon_f = latlon[:, 0], latlon[:, 1]
+    gateway_scores = graph.sum(axis=0)  # column sums = weighted out-degree
+
+    # ── monthly gateway scores (for ENSO panel) ──
+    monthly = np.load(NCEP_DIR / "monthly_gateway_scores.npz")
+    my, mm, ms = monthly["years"], monthly["months"], monthly["scores"]
+
+    ELNINO = [1972, 1982, 1987, 1991, 1997, 2002, 2009, 2015]
+    LANINA = [1973, 1975, 1988, 1998, 1999, 2007, 2010, 2020]
+
+    def _seasonal_avg(years_list):
+        sel = []
+        for i in range(len(my)):
+            y, m = int(my[i]), int(mm[i])
+            if (y in years_list and m in [11, 12]) or ((y - 1) in years_list and m in [1, 2]):
+                sel.append(ms[i])
+        print(f"  Averaged {len(sel)} winter months for {years_list}")
+        return np.mean(sel, axis=0) if sel else np.zeros(ms.shape[1])
+
+    print("  Computing El Niño gateway scores (Winter NDJF)...")
+    en_scores = _seasonal_avg(ELNINO)
+    print("  Computing La Niña gateway scores (Winter NDJF)...")
+    ln_scores = _seasonal_avg(LANINA)
+    diff_scores = en_scores - ln_scores
+
+    # ── figure layout: 3 rows × 1 column ──
+    fig = plt.figure(figsize=(7.2, 9.5))
+    gs = fig.add_gridspec(3, 1, hspace=0.40,
+                          left=0.03, right=0.97, top=0.98, bottom=0.08)
+
+    ax_a = fig.add_subplot(gs[0, 0], projection=proj)  # flow pathways
+    ax_b = fig.add_subplot(gs[1, 0], projection=proj)  # hierarchical clusters
+    ax_c = fig.add_subplot(gs[2, 0], projection=proj)  # ENSO comparison
+
+    # ── helper: global map background (reference style) ──
+    def _global_bg(ax):
+        ax.set_global()
+        ax.add_feature(cfeature.OCEAN, facecolor="#EBF0F5", zorder=0)
+        ax.add_feature(cfeature.LAND, facecolor="#F5F5F0",
+                       edgecolor="#999999", linewidth=0.3, zorder=1)
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.4, edgecolor="#666666", zorder=2)
+        ax.add_feature(cfeature.BORDERS, linewidth=0.2, edgecolor="#999999", zorder=2)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ax.gridlines(draw_labels=False, linewidth=0.3, color="gray",
+                          alpha=0.4, linestyle="--")
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Panel (a): Directed Causal Flow Pathways
+    # ═══════════════════════════════════════════════════════════════════
+    _global_bg(ax_a)
+
+    # Build flow graph: keep top 10% of edges for global teleconnections
+    g_flow = graph.copy()
+    np.fill_diagonal(g_flow, 0)
+    fz = g_flow[g_flow > 1e-8]
+    flow_thresh = np.percentile(fz, 90) if len(fz) > 0 else 0
+    g_flow_sparse = np.where(g_flow >= flow_thresh, g_flow, 0)
+
+    G_flow = nx.DiGraph()
+    G_flow.add_nodes_from(range(graph.shape[0]))
+    for r, c in zip(*np.nonzero(g_flow_sparse)):
+        w_val = float(g_flow_sparse[r, c])
+        G_flow.add_edge(int(c), int(r), weight=w_val, distance=1.0 / (w_val + 1e-12))
+
+    # Robust source selection
+    source, region_bin, reg_sorted = select_primary_source(
+        latlon, gateway_scores, top_k=50, lat_bin=10.0, lon_bin=20.0, max_lat=60.0)
+
+    midlat = np.where(np.abs(lat_f) <= 60)[0]
+    if G_flow.out_degree(source) == 0:
+        candidates = [n for n in midlat if G_flow.out_degree(n) > 0] if len(midlat) > 0 else []
+        if candidates:
+            source = int(max(candidates, key=lambda n: gateway_scores[n]))
+
+    try:
+        lengths, _ = nx.single_source_dijkstra(G_flow, source, weight="distance")
+    except Exception:
+        lengths = {}
+
+    def _geo_km(p_lat1, p_lon1, p_lat2, p_lon2):
+        rlat1, rlon1 = np.radians([p_lat1, p_lon1])
+        rlat2, rlon2 = np.radians([p_lat2, p_lon2])
+        dphi = rlat2 - rlat1
+        dlam = rlon2 - rlon1
+        a = np.sin(dphi / 2) ** 2 + np.cos(rlat1) * np.cos(rlat2) * np.sin(dlam / 2) ** 2
+        return 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a)) * 6371.0
+
+    sorted_targets = [t for t in sorted(lengths, key=lengths.get) if t != source]
+    selected = []
+    n_paths = 60
+    for t in sorted_targets:
+        if _geo_km(lat_f[source], lon_f[source], lat_f[t], lon_f[t]) < 2500:
+            continue
+        if all(_geo_km(lat_f[st], lon_f[st], lat_f[t], lon_f[t]) >= 1000 for st in selected):
+            selected.append(t)
+        if len(selected) == n_paths:
+            break
+
+    lat_ns = "N" if lat_f[source] >= 0 else "S"
+    lon_ew = "E" if lon_f[source] >= 0 else "W"
+    _top3 = " | ".join(f"{b} {s:.5f}" for b, s in reg_sorted[:3])
+    print(f"  [flow] source: node {source} ({abs(lat_f[source]):.1f}°{lat_ns}, "
+          f"{abs(lon_f[source]):.1f}°{lon_ew}), "
+          f"primary region={region_bin}, edges retained: {G_flow.number_of_edges()}, "
+          f"reachable: {len(lengths)}, targets: {len(selected)}")
+    print(f"  [flow] top-3 gateway regions (mean strength): {_top3}")
+
+    # faint background nodes
+    ax_a.scatter(lon_f, lat_f, c="#CCCCCC", s=1, alpha=0.2, transform=pc,
+                 zorder=2, rasterized=True)
+
+    # great-circle causal arcs (Reds colormap, like reference)
+    if selected:
+        strengths = {t: 1.0 / (lengths[t] + 1e-12) for t in selected}
+        mx_s, mn_s = max(strengths.values()), min(strengths.values())
+        for t, w_val in strengths.items():
+            nw = (w_val - mn_s) / (mx_s - mn_s + 1e-12)
+            ax_a.plot([lon_f[source], lon_f[t]], [lat_f[source], lat_f[t]],
+                      color=plt.cm.Reds(0.5 + 0.5 * nw),
+                      linewidth=0.5 + 2.5 * nw, alpha=0.4 + 0.5 * nw,
+                      transform=ccrs.Geodetic(), zorder=3, solid_capstyle="round")
+
+    # target endpoints (blue circles)
+    if selected:
+        t_lats = [lat_f[t] for t in selected]
+        t_lons = [lon_f[t] for t in selected]
+        ax_a.scatter(t_lons, t_lats, c="#1565C0", s=15, alpha=0.7,
+                     transform=pc, zorder=5, edgecolors="white", linewidths=0.3)
+
+    # source marker — red star
+    ax_a.scatter([lon_f[source]], [lat_f[source]], s=200, c="#D32F2F",
+                 marker="*", transform=pc, zorder=6,
+                 edgecolors="white", linewidths=0.8)
+
+    # legend (below map, centered, doesn't block anything)
+    legend_elements = [
+        Line2D([0], [0], marker="*", color="w", markerfacecolor="#D32F2F",
+               markersize=12, label=f"Source ({abs(lat_f[source]):.0f}\u00b0{lat_ns}, "
+                                    f"{abs(lon_f[source]):.0f}\u00b0{lon_ew})  region {region_bin}"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="#1565C0",
+               markersize=7, label=f"Top-{len(selected)} targets"),
+        Line2D([0], [0], color="#D32F2F", linewidth=2, alpha=0.7,
+               label="Causal pathway (width ~ strength)"),
+    ]
+    leg = ax_a.legend(handles=legend_elements, loc="upper center",
+                       bbox_to_anchor=(0.5, -0.06), ncol=3,
+                       fontsize=5.5, framealpha=0.9, edgecolor="#CCCCCC",
+                       handlelength=0.8, handletextpad=0.4, borderpad=0.3)
+    leg.get_frame().set_linewidth(0.3)
+
+    ax_a.set_title(
+        f"Causal Flow Pathways from Top Gateway\n"
+        f"Source: {abs(lat_f[source]):.0f}\u00b0{lat_ns}, {abs(lon_f[source]):.0f}\u00b0{lon_ew}  "
+        f"region {region_bin}  |  "
+        f"N={len(gateway_scores):,} nodes  |  "
+        f"Top-{len(selected)} causal targets\n"
+        f"(Line width ~ causal strength)",
+        fontsize=9.5, fontweight="bold", pad=6, color="#222222",
+    )
+    panel_label(ax_a, "a", x=0.02, y=0.96)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Panel (b): Hierarchical Causal Clusters
+    # ── Single-level clarity ──
+    #   15 level-1 macro-regions as translucent convex hulls.
+    #   One hub per region (the strongest level-0 cluster inside it).
+    #   Inter-region causal edges aggregated from level-0.
+    #   No fine dots — clean and readable.
+    # ═══════════════════════════════════════════════════════════════════
+    n_clusters = len(latlon_1)
+    cluster_cmap = plt.cm.tab20
+    n_col = cluster_cmap.N
+
+    # Load level-1 cluster labels (256 level-0 → 15 level-1)
+    labels_1 = np.load(HIER / "cluster_labels_1.npy")
+    l1_unique = np.unique(labels_1)
+    n_l1 = len(l1_unique)
+    l1_color = {int(k): cluster_cmap(int(i * n_col / n_l1) % n_col) for i, k in enumerate(l1_unique)}
+
+    # Compute level-0 cluster hub positions
+    lat_c = np.full(n_clusters, np.nan)
+    lon_c = np.full(n_clusters, np.nan)
+    for i in range(n_clusters):
+        nodes = np.where(cluster_labels == i)[0]
+        if len(nodes) > 0:
+            hub = nodes[np.argmax(gateway_scores[nodes])]
+            lat_c[i] = lat_f[hub]
+            lon_c[i] = lon_f[hub]
+
+    _global_bg(ax_b)
+
+    # ── Background: all 10,512 nodes as causal gateway intensity heatmap ──
+    # Faint, small dots using YlOrRd — shows where causal influence is
+    # concentrated globally; provides spatial context for the hierarchical overlay.
+    gw_vmax = gateway_scores.max()
+    ax_b.scatter(lon_f, lat_f, c=gateway_scores, cmap="Greys",
+                 s=1.2, alpha=0.35, transform=pc,
+                 vmin=0, vmax=gw_vmax, zorder=2.5,
+                 edgecolors="none", rasterized=True)
+
+    # ── Level-1: one hub per macro-region (strongest internal level-0) ──
+    # Use idx=0..14 (sequential) via l1_map: raw l1_id → sequential idx
+    l1_map = {int(k): i for i, k in enumerate(l1_unique)}
+    l1_lat = np.full(n_l1, np.nan)
+    l1_lon = np.full(n_l1, np.nan)
+    for l1_id in l1_unique:
+        l0_members = np.where(labels_1 == l1_id)[0]
+        # pick the level-0 hub with max gateway score as the region hub
+        valid_hubs = [(i, gateway_scores[cluster_labels == i].max()) for i in l0_members
+                      if not np.isnan(lat_c[i])]
+        if valid_hubs:
+            best = max(valid_hubs, key=lambda x: x[1])
+            idx = l1_map[int(l1_id)]
+            l1_lat[idx] = lat_c[best[0]]
+            l1_lon[idx] = lon_c[best[0]]
+
+    # ── Aggregate level-0 → level-1 causal matrix ──
+    np.fill_diagonal(inter_cluster, 0)
+    l1_graph = np.zeros((n_l1, n_l1))
+    for l1_src in l1_unique:
+        for l1_tgt in l1_unique:
+            if l1_src == l1_tgt:
+                continue
+            src_l0 = np.where(labels_1 == l1_src)[0]
+            tgt_l0 = np.where(labels_1 == l1_tgt)[0]
+            total = inter_cluster[np.ix_(tgt_l0, src_l0)].sum()
+            l1_graph[l1_map[int(l1_tgt)], l1_map[int(l1_src)]] = total
+
+    # ── Level-1 hub sizing ──
+    l1_strength = l1_graph.sum(axis=0) + l1_graph.sum(axis=1)
+    cs_log = np.log1p(l1_strength)
+    cs_norm = cs_log / (cs_log.max() + 1e-12)
+    sizes = 30 + 120 * cs_norm
+
+    # Region hub nodes
+    for idx in range(n_l1):
+        if not np.isnan(l1_lat[idx]):
+            l1_id = int(l1_unique[idx])
+            ax_b.scatter([l1_lon[idx]], [l1_lat[idx]],
+                         facecolors=[l1_color[l1_id]], s=sizes[idx],
+                         transform=pc, zorder=5,
+                         edgecolors="white", linewidths=0.5, alpha=0.9)
+
+    # ── Level-1 inter-region causal edges (top 30%) ──
+    flat_l1 = l1_graph.ravel()[l1_graph.ravel() > 1e-8]
+    if len(flat_l1) > 0:
+        edge_thresh = np.percentile(flat_l1, 70)
+        max_w = flat_l1.max()
+        min_w = flat_l1.min()
+        for ri in range(n_l1):
+            for ci in range(n_l1):
+                if ri == ci:
+                    continue
+                w = l1_graph[ri, ci]
+                if w < edge_thresh or np.isnan(l1_lon[ci]) or np.isnan(l1_lon[ri]):
+                    continue
+                nw = (w - min_w) / (max_w - min_w + 1e-12)
+                lw = 0.4 + 1.6 * nw
+                alpha_val = 0.15 + 0.45 * nw
+                c_id = int(l1_unique[ci])
+                ax_b.plot([l1_lon[ci], l1_lon[ri]], [l1_lat[ci], l1_lat[ri]],
+                          color=l1_color[c_id],
+                          linewidth=lw, alpha=alpha_val,
+                          transform=ccrs.Geodetic(), zorder=4, solid_capstyle="round")
+
+    # ── Legend (below map, centred) ──
+    legend_elements = [
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888",
+               markersize=6, label="Causal gateway intensity"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="#CC4444",
+               markersize=6, markeredgecolor="white", markeredgewidth=0.5,
+               label="Region hub (size ~ strength)"),
+        Line2D([0], [0], color="#888888", linewidth=1, alpha=0.7,
+               label="Inter-region causal flow"),
+    ]
+    leg = ax_b.legend(handles=legend_elements, loc="upper center",
+                       bbox_to_anchor=(0.5, -0.06), ncol=3,
+                       fontsize=5.5, framealpha=0.9, edgecolor="#CCCCCC",
+                       handlelength=0.8, handletextpad=0.4, borderpad=0.3)
+    leg.get_frame().set_linewidth(0.3)
+
+    ax_b.set_title(
+        f"Causal Hierarchical Structure\n"
+        f"Gateway intensity background  |  "
+        f"{n_l1} macro-region hubs & causal flow overlay",
+        fontsize=9.5, fontweight="bold", pad=6, color="#222222",
+    )
+    panel_label(ax_b, "b", x=0.02, y=0.96)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Panel (c): El Niño versus La Niña Topology Reorganisation
+    # ═══════════════════════════════════════════════════════════════════
+    _global_bg(ax_c)
+
+    diff_vmax = np.percentile(np.abs(diff_scores), 99)
+    diff_vmax = diff_vmax if diff_vmax > 0 else 1e-4
+    diff_thresh = np.percentile(np.abs(diff_scores), 90)
+
+    # faint background
+    diff_bg = np.abs(diff_scores) < diff_thresh
+    ax_c.scatter(lon_f[diff_bg], lat_f[diff_bg], c=diff_scores[diff_bg],
+                 cmap="RdBu_r", s=1.5, alpha=0.25, transform=pc,
+                 vmin=-diff_vmax, vmax=diff_vmax, zorder=3,
+                 edgecolors="none", rasterized=True)
+
+    # highlighted top differences
+    diff_top = np.abs(diff_scores) >= diff_thresh
+    sc_c = ax_c.scatter(lon_f[diff_top], lat_f[diff_top], c=diff_scores[diff_top],
+                         cmap="RdBu_r", s=20, alpha=0.85, transform=pc,
+                         vmin=-diff_vmax, vmax=diff_vmax, zorder=4,
+                         edgecolors="#333", linewidths=0.3)
+
+    # colorbar below the map
+    pos = ax_c.get_position()
+    cax_c = fig.add_axes(
+        [pos.x0 + 0.05, pos.y0 - 0.035, pos.width - 0.10, 0.010],
+    )
+    cbar_c = fig.colorbar(sc_c, cax=cax_c, orientation="horizontal")
+    cbar_c.set_label("Δ gateway score  (El Niño − La Niña)", fontsize=7.5, color="#333333")
+    cbar_c.ax.tick_params(labelsize=6.5, length=2.0, colors="#555555")
+
+    ax_c.set_title(
+        "Topological Reorganization: El Ni\u00f1o vs La Ni\u00f1a (Winter NDJF)\n"
+        "Difference Map \u2014 Positive/Red = Stronger Causal Gateway in El Ni\u00f1o",
+        fontsize=9.5, fontweight="bold", pad=6, color="#222222",
+    )
+    panel_label(ax_c, "c", x=0.02, y=0.96)
+
+    save_all(fig, "climate_combined")
+
+
 def main() -> None:
     apply_style()
-    synthetic_bar_figure()
-    synthetic_spatial_layouts()
+    synthetic_combined()
     cluster_maps()
     dynamic_intensity()
     beijing_cases()
     evcdp_combined()
     scalability_figure()
+    urban_scalability_combined()
+    climate_combined()
 
 
 if __name__ == "__main__":

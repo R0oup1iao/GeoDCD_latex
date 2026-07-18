@@ -425,10 +425,17 @@ Authors must declare all potential interests – whether or not they actually ha
 
 If there are none, the authors should state ``The author(s) declare(s) that there is no conflict of interest regarding the publication of this article.'' Submitting authors are responsible for coauthors declaring their interests. Declared conflicts of interest will be considered by the editor and reviewers and included in the published article.
 
-\subsection*{Data Availability}
-A data availability statement is compulsory for all research articles. This statement describes whether and how others can access the data supporting the findings of the paper, including 1) what the nature of the data is, 2) where the data can be accessed, and 3) any restrictions on data access and why.
+\subsection*{Code Availability}
+The GeoDCD model implementation, training and inference pipelines, evaluation metrics, and synthetic data generation code (including VAR, Lorenz96, and Cluster Lorenz) are publicly available at \url{https://github.com/BUAA-ACME/GeoDCD-core}.
 
-If data are in an archive, include the accession number or a placeholder for it. Also include any materials that must be obtained through a Material Transfer Agreements (MTA). 
+\subsection*{Data Availability}
+All datasets used in this study are accessible as follows:
+
+\begin{itemize}
+    \item \textbf{Synthetic data}. The VAR, Lorenz96, and Cluster Lorenz datasets are generated using the synthetic data generation scripts provided in the GeoDCD-core repository at \url{https://github.com/BUAA-ACME/GeoDCD-core}. The Finance dataset is generated using the UnCLE~\cite{bi_uncle_2025} repository at \url{https://github.com/etigerstudio/uncle-causal-discovery}.
+    \item \textbf{Meteorological data}. The ncep-slp dataset comprises daily mean sea-level pressure fields from the NCEP/NCAR Reanalysis 1 project~\cite{kalnay1996ncep}, provided by the NOAA Physical Sciences Laboratory at \url{https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html}.
+    \item \textbf{Traffic data}. The SD, GLA, and GBA traffic datasets are subsets of the LargeST benchmark~\cite{liu2023largest}, publicly available at \url{https://github.com/zezhishao/LargeST}. The Beijing traffic dataset was provided by Amap (Gaode Maps) and cannot be redistributed due to commercial data licensing restrictions. The ST-EVCDP dataset is an open-source electric vehicle charging demand dataset~\cite{qu2024stevcdp}, available at \url{https://github.com/IntelligentSystemsLab/ST-EVCDP}.
+\end{itemize} 
 
 \section*{Supplementary Materials}
 
